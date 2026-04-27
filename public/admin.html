@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Abiball 2025 – Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="topbar">
+  <h1>🎓 Abiball 2025 – Admin</h1>
+  <div class="nav-links">
+    <a href="/">Ticketkauf</a>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="persons">👥 Personen &amp; Codes</button>
+    <button class="tab-btn" data-tab="payments">💳 Zahlungen</button>
+  </div>
+
+  <!-- ── TAB: Personen ──────────────────────────────────────────── -->
+  <div class="tab-pane active" id="tab-persons">
+
+    <!-- Codes generieren -->
+    <div class="card">
+      <h2>➕ Zugangscodes generieren</h2>
+      <div id="genAlert"></div>
+
+      <p style="font-size:.9rem;color:var(--muted);margin-bottom:1rem">
+        Füge pro Zeile eine Person ein: <code>Name; E-Mail (optional); Anzahl Tickets</code><br>
+        Beispiel: <code>Max Mustermann; max@schule.de; 2</code>
+      </p>
+
+      <div class="form-group">
+        <label for="personsBulk">Personen (eine pro Zeile)</label>
+        <textarea id="personsBulk" rows="8" placeholder="Max Mustermann; max@schule.de; 2
+Erika Muster; ; 1
+Anna Schmidt; anna@example.com; 3"></textarea>
+      </div>
+
+      <button class="btn btn-primary" id="generateBtn">Codes generieren</button>
+    </div>
+
+    <!-- Export -->
+    <div class="card">
+      <h2>📥 Codes exportieren</h2>
+      <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
+        <a class="btn btn-outline" href="/api/admin/export/csv" download>⬇ CSV herunterladen</a>
+        <a class="btn btn-outline" href="/api/admin/export/excel" download>⬇ Excel herunterladen</a>
+      </div>
+    </div>
+
+    <!-- Personenliste -->
+    <div class="card">
+      <h2>📋 Alle Personen</h2>
+      <div id="personsAlert"></div>
+      <div style="overflow-x:auto">
+        <table id="personsTable">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>E-Mail</th>
+              <th>Code</th>
+              <th># Tickets</th>
+              <th>Erstellt</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="personsTbody">
+            <tr><td colspan="6" style="text-align:center;color:var(--muted)">Lade…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /tab-persons -->
+
+  <!-- ── TAB: Zahlungen ─────────────────────────────────────────── -->
+  <div class="tab-pane" id="tab-payments">
+
+    <!-- Kontoauszug hochladen -->
+    <div class="card">
+      <h2>📤 Kontoauszug hochladen (CSV)</h2>
+      <div id="uploadAlert"></div>
+
+      <p style="font-size:.9rem;color:var(--muted);margin-bottom:1rem">
+        Exportiere deinen Kontoauszug als CSV-Datei aus deinem Online-Banking und lade sie hier hoch.
+        Das System ordnet Zahlungen automatisch den Bestellungen zu.
+      </p>
+
+      <div class="form-group">
+        <label for="statementFile">CSV-Datei (max. 5 MB)</label>
+        <input type="file" id="statementFile" accept=".csv,.txt">
+      </div>
+
+      <button class="btn btn-primary" id="uploadBtn">Hochladen &amp; prüfen</button>
+    </div>
+
+    <!-- Zahlungsliste -->
+    <div class="card">
+      <h2>💳 Zahlungsübersicht</h2>
+      <div id="paymentsAlert"></div>
+      <div style="overflow-x:auto">
+        <table id="paymentsTable">
+          <thead>
+            <tr>
+              <th>Datum</th>
+              <th>Absender</th>
+              <th>Verwendungszweck</th>
+              <th>Betrag</th>
+              <th>Zuordnung</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="paymentsTbody">
+            <tr><td colspan="7" style="text-align:center;color:var(--muted)">Lade…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /tab-payments -->
+
+</div><!-- /container -->
+
+<script src="/js/admin.js"></script>
+</body>
+</html>
