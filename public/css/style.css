@@ -204,4 +204,41 @@ tr:nth-child(even) td { background: #fafafa; }
   .topbar h1 { font-size: 1rem; }
   .hero h1   { font-size: 1.75rem; }
   .code-input-big { font-size: 1.4rem !important; letter-spacing: .15em; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ── Stats-Grid (Dashboard) ─────────────────────────────────── */
+.stats-grid {
+  display:               grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap:                   1rem;
+  margin-bottom:         1.5rem;
+}
+.stat-card {
+  background:    var(--card);
+  border-radius: var(--radius);
+  box-shadow:    var(--shadow);
+  padding:       1.25rem 1rem;
+  text-align:    center;
+}
+.stat-value {
+  font-size:   1.75rem;
+  font-weight: 700;
+  color:       var(--primary);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size:  .8rem;
+  color:      var(--muted);
+  margin-top: .25rem;
+}
+
+/* ── Settings-Grid ──────────────────────────────────────────── */
+.settings-grid {
+  display:               grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap:                   0 1.25rem;
+}
+
+/* ── Badge primary ──────────────────────────────────────────── */
+.badge-primary { background: #cce5ff; color: var(--primary); }

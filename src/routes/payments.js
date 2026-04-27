@@ -10,12 +10,12 @@ const router  = express.Router();
 const multer  = require('multer');
 const path    = require('path');
 
-const { getDb }           = require('../database');
+const { getDb, getSettings }  = require('../database');
 const { parseBankCsv }    = require('../utils/bankParser');
 const { generateQrBuffer } = require('../utils/qrGenerator');
 const { sendTicketEmail }  = require('../utils/emailSender');
 
-const TICKET_PRICE = parseFloat(process.env.TICKET_PRICE || '45');
+const TICKET_PRICE = parseFloat(process.env.TICKET_PRICE || '45'); // fallback; DB settings take precedence at runtime
 
 // Multer-Konfiguration: CSV-Upload im Arbeitsspeicher (kein Dateipfad)
 const upload = multer({
@@ -36,6 +36,8 @@ router.post('/upload', upload.single('statement'), (req, res) => {
 
   const entries = parseBankCsv(csvText);
   const db      = getDb();
+  const s       = getSettings();
+  const TICKET_PRICE = parseFloat(s.ticket_price || '45');
 
   const allPersons = db.prepare('SELECT * FROM persons').all();
   const results    = [];
