@@ -4,6 +4,19 @@ const codeInput = document.getElementById('codeInput');
 const verifyBtn = document.getElementById('verifyBtn');
 const alertBox  = document.getElementById('alertBox');
 
+// Update page branding dynamically from server config
+fetch('/api/tickets/config')
+  .then(r => r.json())
+  .then(cfg => {
+    if (!cfg.event) return;
+    document.title = `${cfg.event} – Ticketkauf`;
+    const navH1 = document.querySelector('.topbar h1');
+    if (navH1) navH1.textContent = `🎓 ${cfg.event}`;
+    const heroH1 = document.querySelector('.hero h1');
+    if (heroH1) heroH1.textContent = `Willkommen zum ${cfg.event} 🎉`;
+  })
+  .catch(() => {});
+
 function showAlert(msg, type = 'danger') {
   alertBox.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
 }

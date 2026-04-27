@@ -418,6 +418,14 @@ async function loadSettings() {
     const data = await res.json();
     applySettingsToForm(data.settings || {});
     updateSettingsPreview(data.settings || {});
+    if (data.envStatus) renderEnvStatus(data.envStatus);
+    // Update page branding from event_name setting
+    const eventName = (data.settings || {}).event_name;
+    if (eventName) {
+      document.title = `${eventName} – Admin`;
+      const navH1 = document.querySelector('.topbar h1');
+      if (navH1) navH1.textContent = `🎓 ${eventName} – Admin`;
+    }
   } catch {
     // silent
   }
@@ -436,6 +444,24 @@ function applySettingsToForm(s) {
 
 function updateSettingsPreview(s) {
   document.getElementById('settingsPreview').textContent = JSON.stringify(s, null, 2);
+}
+
+function renderEnvStatus(env) {
+  const el = document.getElementById('envStatusContent');
+  if (!el) return;
+  const rows = Object.entries(env).map(([k, v]) => {
+    const isSet = v !== '';
+    return `<tr>
+      <td><code>${esc(k)}</code></td>
+      <td>${isSet
+        ? `<span class="badge badge-success">✓ gesetzt</span> <span style="font-size:.85rem;color:var(--muted)">${esc(v)}</span>`
+        : '<span class="badge badge-muted">nicht gesetzt</span>'}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<div style="overflow-x:auto"><table>
+    <thead><tr><th>Variable</th><th>Wert / Status</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
 }
 
 async function saveSettings(keys, alertId, btnId, btnLabel) {

@@ -4,7 +4,10 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, '../abiball.sqlite');
+const DATA_DIR = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.join(__dirname, '..');
+const DB_PATH = path.join(DATA_DIR, 'abiball.sqlite');
 
 let db;
 
@@ -78,16 +81,26 @@ function initSchema(db) {
   const seedSetting = db.prepare(
     'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)'
   );
+  const upsertSetting = db.prepare(
+    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+  );
   const defaults = [
-    ['event_name',    'Abiball 2025'],
+    ['event_name',    'Abiball 2026'],
     ['event_location','Eventlocation, Musterstadt'],
-    ['event_date',    '21.06.2025'],
+    ['event_date',    '20.06.2026'],
     ['ticket_price',  '45.00'],
-    ['bank_iban',     process.env.BANK_IBAN  || 'DE00 1234 5678 9012 3456 78'],
-    ['bank_bic',      process.env.BANK_BIC   || 'XXXXXXXX'],
-    ['bank_name',     process.env.BANK_NAME  || 'Abiball-Komitee e.V.'],
+    ['bank_iban',     ''],
+    ['bank_bic',      ''],
+    ['bank_name',     ''],
   ];
-  const seedAll = db.transaction(() => defaults.forEach(([k, v]) => seedSetting.run(k, v)));
+  const seedAll = db.transaction(() => {
+    defaults.forEach(([k, v]) => seedSetting.run(k, v));
+    // Always reflect env vars so Docker environment variables take immediate effect
+    if (process.env.BANK_IBAN)    upsertSetting.run('bank_iban',    process.env.BANK_IBAN);
+    if (process.env.BANK_BIC)     upsertSetting.run('bank_bic',     process.env.BANK_BIC);
+    if (process.env.BANK_NAME)    upsertSetting.run('bank_name',    process.env.BANK_NAME);
+    if (process.env.TICKET_PRICE) upsertSetting.run('ticket_price', process.env.TICKET_PRICE);
+  });
   seedAll();
 }
 
