@@ -101,7 +101,7 @@ router.post('/:id/send', async (req, res) => {
   const db = getDb();
   const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(req.params.id);
   if (!payment) return res.status(404).json({ error: 'Zahlung nicht gefunden' });
-  if (!payment.person_id) return res.status(400).json({ error: 'Kein Zuordnung zu einer Person' });
+  if (!payment.person_id) return res.status(400).json({ error: 'Keine Zuordnung zu einer Person' });
 
   const person = db.prepare('SELECT * FROM persons WHERE id = ?').get(payment.person_id);
   if (!person?.email) return res.status(400).json({ error: 'Keine E-Mail-Adresse hinterlegt' });

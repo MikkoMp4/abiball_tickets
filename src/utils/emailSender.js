@@ -30,6 +30,13 @@ function createTransport() {
 async function sendTicketEmail({ to, personName, qrBuffers }) {
   const transport = createTransport();
 
+  // HTML-Sonderzeichen escapen um XSS zu verhindern
+  const safeName = String(personName)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
   const attachments = qrBuffers.map((buf, idx) => ({
     filename: `ticket_${idx + 1}.png`,
     content: buf,
@@ -41,7 +48,7 @@ async function sendTicketEmail({ to, personName, qrBuffers }) {
     to,
     subject: 'Deine Abiball-Tickets 🎓',
     text: `Hallo ${personName},\n\nvielen Dank für deine Zahlung! Im Anhang findest du deine Ticket-QR-Codes.\nBitte zeige diese am Einlass vor.\n\nWir freuen uns auf einen unvergesslichen Abend!\n\nDein Abiball-Team`,
-    html: `<p>Hallo <strong>${personName}</strong>,</p>
+    html: `<p>Hallo <strong>${safeName}</strong>,</p>
            <p>vielen Dank für deine Zahlung! Im Anhang findest du deine Ticket-QR-Codes.<br>
            Bitte zeige diese am Einlass vor.</p>
            <p>Wir freuen uns auf einen unvergesslichen Abend!</p>

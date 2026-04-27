@@ -136,15 +136,14 @@ function renderPayments(payments) {
       <td>
         ${p.matched && !p.qr_sent
           ? `<button class="btn btn-success" style="padding:.3rem .7rem;font-size:.8rem"
-               onclick="sendTickets(${p.id})">✉ Tickets senden</button>`
+               onclick="sendTickets(${p.id}, this)">✉ Tickets senden</button>`
           : ''}
       </td>
     </tr>
   `).join('');
 }
 
-window.sendTickets = async function(paymentId) {
-  const btn = event.target;
+window.sendTickets = async function(paymentId, btn) {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>';
 
