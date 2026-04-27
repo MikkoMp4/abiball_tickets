@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Abiball 2025 – Ticketbestellung</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="topbar">
+  <h1>🎓 Abiball 2025</h1>
+  <div class="nav-links">
+    <a href="/">← Zurück</a>
+    <a href="/admin.html">Admin</a>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- Personeninfo -->
+  <div class="card" id="personCard">
+    <h2>👤 Deine Bestellung</h2>
+    <p id="personInfo" class="muted" style="color:var(--muted)">Lade…</p>
+  </div>
+
+  <!-- Formular für Tickets -->
+  <div class="card" id="orderCard" style="display:none">
+    <h2>🎟️ Ticket-Details</h2>
+    <div id="alertBox"></div>
+
+    <div id="ticketForms"></div>
+
+    <div class="card" style="background:#f5f7ff;box-shadow:none;padding:1rem;margin-top:1rem;">
+      <strong>Gesamtbetrag: <span id="totalPrice">0,00 €</span></strong>
+      <p style="font-size:.85rem;color:var(--muted);margin-top:.3rem">
+        Preis pro Ticket: <span id="pricePerTicket">–</span>
+      </p>
+    </div>
+
+    <button class="btn btn-accent" id="submitBtn" style="margin-top:1rem;width:100%;">
+      Bestellung absenden &amp; Zahlungsinfo erhalten
+    </button>
+  </div>
+
+  <!-- Zahlungsinfo / EPC-Code -->
+  <div class="card" id="paymentCard" style="display:none">
+    <h2>💳 Zahlungsanweisung</h2>
+    <div id="alertBox2"></div>
+
+    <p>Bitte überweise den folgenden Betrag mit dem angegebenen Verwendungszweck:</p>
+
+    <table style="margin-top:.8rem;margin-bottom:.8rem;">
+      <tr><th>Betrag</th><td id="payAmount">–</td></tr>
+      <tr><th>IBAN</th><td id="payIban">–</td></tr>
+      <tr><th>Empfänger</th><td id="payName">–</td></tr>
+      <tr><th>Verwendungszweck</th><td id="payRef">–</td></tr>
+    </table>
+
+    <p style="font-size:.9rem;color:var(--muted);margin-bottom:.5rem">
+      Oder scanne diesen QR-Code mit deiner Banking-App (Girocode/EPC):
+    </p>
+    <img id="epcQrImg" class="qr-img" width="200" height="200" alt="EPC QR-Code" style="display:none">
+
+    <div class="alert alert-info" style="margin-top:1rem">
+      Nach Zahlungseingang erhältst du deine Ticket-QR-Codes per E-Mail.
+    </div>
+  </div>
+
+</div>
+
+<script src="/js/order.js"></script>
+</body>
+</html>
