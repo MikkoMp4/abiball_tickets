@@ -48,6 +48,13 @@ async function init() {
 
     pricePerTicket.textContent = fmt(config.price);
 
+    // Update page branding from config
+    if (config.event) {
+      document.title = `${config.event} – Ticketbestellung`;
+      const navH1 = document.querySelector('.topbar h1');
+      if (navH1) navH1.textContent = `🎓 ${config.event}`;
+    }
+
     // Personendaten via Code-Verifikation laden
     const verifyRes = await fetch('/api/codes/verify', {
       method:  'POST',
