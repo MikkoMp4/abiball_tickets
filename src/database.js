@@ -34,6 +34,8 @@ function initSchema(db) {
       submitted  INTEGER NOT NULL DEFAULT 0,
       total_eur  REAL,
       epc_blob   TEXT,
+      paid       INTEGER NOT NULL DEFAULT 0,
+      paid_at    TEXT,
       created_at TEXT    NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -56,7 +58,46 @@ function initSchema(db) {
       qr_sent         INTEGER NOT NULL DEFAULT 0,
       created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key   TEXT PRIMARY KEY,
+      value TEXT
+    );
   `);
+
+  // Migrate existing orders table: add paid / paid_at columns if missing
+  const orderCols = db.pragma('table_info(orders)').map(c => c.name);
+  if (!orderCols.includes('paid')) {
+    db.exec('ALTER TABLE orders ADD COLUMN paid INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!orderCols.includes('paid_at')) {
+    db.exec('ALTER TABLE orders ADD COLUMN paid_at TEXT');
+  }
+
+  // Seed default settings if not present
+  const seedSetting = db.prepare(
+    'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)'
+  );
+  const defaults = [
+    ['event_name',    'Abiball 2025'],
+    ['event_location','Eventlocation, Musterstadt'],
+    ['event_date',    '21.06.2025'],
+    ['ticket_price',  '45.00'],
+    ['bank_iban',     process.env.BANK_IBAN  || 'DE00 1234 5678 9012 3456 78'],
+    ['bank_bic',      process.env.BANK_BIC   || 'XXXXXXXX'],
+    ['bank_name',     process.env.BANK_NAME  || 'Abiball-Komitee e.V.'],
+  ];
+  const seedAll = db.transaction(() => defaults.forEach(([k, v]) => seedSetting.run(k, v)));
+  seedAll();
 }
 
-module.exports = { getDb };
+/**
+ * Returns all settings as a plain key-value object.
+ */
+function getSettings() {
+  const db   = getDb();
+  const rows = db.prepare('SELECT key, value FROM settings').all();
+  return Object.fromEntries(rows.map(r => [r.key, r.value]));
+}
+
+module.exports = { getDb, getSettings };

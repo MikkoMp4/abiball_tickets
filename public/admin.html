@@ -15,20 +15,168 @@
   </div>
 </nav>
 
-<div class="container">
+<div class="container" style="max-width:1100px">
 
   <!-- Tabs -->
   <div class="tabs">
-    <button class="tab-btn active" data-tab="persons">👥 Personen &amp; Codes</button>
+    <button class="tab-btn active" data-tab="dashboard">📊 Übersicht</button>
     <button class="tab-btn" data-tab="payments">💳 Zahlungen</button>
+    <button class="tab-btn" data-tab="orders">🎟 Bestellungen</button>
+    <button class="tab-btn" data-tab="persons">👥 Personen</button>
+    <button class="tab-btn" data-tab="settings">⚙️ Einstellungen</button>
   </div>
 
+  <!-- ── TAB: Dashboard ────────────────────────────────────────── -->
+  <div class="tab-pane active" id="tab-dashboard">
+
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card"><div class="stat-value" id="st-persons">–</div><div class="stat-label">Personen</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-orders">–</div><div class="stat-label">Bestellungen</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-paid">–</div><div class="stat-label">Bezahlt</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-unpaid">–</div><div class="stat-label">Ausstehend</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-tickets">–</div><div class="stat-label">Tickets gesamt</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-revenue">–</div><div class="stat-label">Einnahmen</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-pending-rev">–</div><div class="stat-label">Offen (EUR)</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-payments">–</div><div class="stat-label">Zahlungseingänge</div></div>
+    </div>
+
+    <!-- Schnelle Aktionsliste: offene Bestellungen -->
+    <div class="card">
+      <h2>⏳ Offene Zahlungen (noch nicht bezahlt)</h2>
+      <div id="dashUnpaidAlert"></div>
+      <div style="overflow-x:auto">
+        <table id="dashUnpaidTable">
+          <thead>
+            <tr><th>Person</th><th>Code</th><th>Tickets</th><th>Betrag</th><th>Bestellt am</th></tr>
+          </thead>
+          <tbody id="dashUnpaidTbody">
+            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Lade…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /tab-dashboard -->
+
+  <!-- ── TAB: Zahlungen ─────────────────────────────────────────── -->
+  <div class="tab-pane" id="tab-payments">
+
+    <!-- PRIMARY: PDF-Upload -->
+    <div class="card" style="border:2px solid var(--primary)">
+      <h2>📄 Kontoauszug als PDF hochladen <span class="badge badge-primary" style="font-size:.75rem;vertical-align:middle">Empfohlen</span></h2>
+      <div id="pdfUploadAlert"></div>
+
+      <p style="font-size:.9rem;color:var(--muted);margin-bottom:1rem">
+        Lade eine oder mehrere Bank-PDF-Dateien hoch. Das System sucht automatisch nach
+        Abiball-Referenznummern und gleicht die Beträge ab. Passende Bestellungen werden
+        sofort als <strong>bezahlt</strong> markiert.
+      </p>
+
+      <div class="form-group">
+        <label for="pdfFiles">PDF-Dateien (max. 20 Dateien, je max. 20 MB)</label>
+        <input type="file" id="pdfFiles" accept=".pdf" multiple>
+      </div>
+
+      <button class="btn btn-primary" id="pdfUploadBtn">📤 PDFs hochladen &amp; abgleichen</button>
+    </div>
+
+    <!-- SECONDARY: CSV-Upload -->
+    <div class="card">
+      <h2>📊 Kontoauszug als CSV hochladen</h2>
+      <div id="csvUploadAlert"></div>
+
+      <p style="font-size:.9rem;color:var(--muted);margin-bottom:1rem">
+        Alternativ kannst du den Kontoauszug als CSV-Datei hochladen.
+      </p>
+
+      <div class="form-group">
+        <label for="statementFile">CSV-Datei (max. 5 MB)</label>
+        <input type="file" id="statementFile" accept=".csv,.txt">
+      </div>
+
+      <button class="btn btn-outline" id="csvUploadBtn">Hochladen &amp; prüfen</button>
+    </div>
+
+    <!-- PDF-Ergebnis -->
+    <div class="card" id="pdfResultCard" style="display:none">
+      <h2>📋 Ergebnis der PDF-Verarbeitung</h2>
+      <div id="pdfResultContent"></div>
+    </div>
+
+    <!-- Zahlungsliste -->
+    <div class="card">
+      <h2>💳 Zahlungsübersicht</h2>
+      <div id="paymentsAlert"></div>
+      <div style="overflow-x:auto">
+        <table id="paymentsTable">
+          <thead>
+            <tr>
+              <th>Datum</th>
+              <th>Absender</th>
+              <th>Verwendungszweck</th>
+              <th>Betrag</th>
+              <th>Zuordnung</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="paymentsTbody">
+            <tr><td colspan="7" style="text-align:center;color:var(--muted)">Lade…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /tab-payments -->
+
+  <!-- ── TAB: Bestellungen ──────────────────────────────────────── -->
+  <div class="tab-pane" id="tab-orders">
+
+    <div class="card">
+      <h2>🎟 Alle Bestellungen</h2>
+      <div id="ordersAlert"></div>
+
+      <!-- Filter -->
+      <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1rem;align-items:center">
+        <label style="font-weight:600;font-size:.9rem">Filter:</label>
+        <select id="ordersFilter" style="padding:.4rem .7rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.9rem">
+          <option value="all">Alle</option>
+          <option value="paid">Bezahlt</option>
+          <option value="unpaid">Offen</option>
+          <option value="sent">QR gesendet</option>
+        </select>
+        <button class="btn btn-outline" style="padding:.35rem .85rem;font-size:.85rem" onclick="loadOrders()">🔄 Aktualisieren</button>
+      </div>
+
+      <div style="overflow-x:auto">
+        <table id="ordersTable">
+          <thead>
+            <tr>
+              <th>Person</th>
+              <th>E-Mail</th>
+              <th>Code</th>
+              <th>Tickets</th>
+              <th>Betrag</th>
+              <th>Status</th>
+              <th>Bestellt</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="ordersTbody">
+            <tr><td colspan="8" style="text-align:center;color:var(--muted)">Lade…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /tab-orders -->
+
   <!-- ── TAB: Personen ──────────────────────────────────────────── -->
-  <div class="tab-pane active" id="tab-persons">
+  <div class="tab-pane" id="tab-persons">
 
     <!-- Codes generieren -->
     <div class="card">
-      <h2>➕ Zugangscodes generieren</h2>
+      <h2>➕ Schüler &amp; Tickets erfassen</h2>
       <div id="genAlert"></div>
 
       <p style="font-size:.9rem;color:var(--muted);margin-bottom:1rem">
@@ -67,12 +215,14 @@ Anna Schmidt; anna@example.com; 3"></textarea>
               <th>E-Mail</th>
               <th>Code</th>
               <th># Tickets</th>
+              <th>Bestellt</th>
+              <th>Bezahlt</th>
               <th>Erstellt</th>
               <th></th>
             </tr>
           </thead>
           <tbody id="personsTbody">
-            <tr><td colspan="6" style="text-align:center;color:var(--muted)">Lade…</td></tr>
+            <tr><td colspan="8" style="text-align:center;color:var(--muted)">Lade…</td></tr>
           </tbody>
         </table>
       </div>
@@ -80,52 +230,65 @@ Anna Schmidt; anna@example.com; 3"></textarea>
 
   </div><!-- /tab-persons -->
 
-  <!-- ── TAB: Zahlungen ─────────────────────────────────────────── -->
-  <div class="tab-pane" id="tab-payments">
+  <!-- ── TAB: Einstellungen ─────────────────────────────────────── -->
+  <div class="tab-pane" id="tab-settings">
 
-    <!-- Kontoauszug hochladen -->
+    <!-- Event-Daten -->
     <div class="card">
-      <h2>📤 Kontoauszug hochladen (CSV)</h2>
-      <div id="uploadAlert"></div>
+      <h2>🎉 Veranstaltungsinfos</h2>
+      <div id="settingsEventAlert"></div>
+      <div class="settings-grid">
+        <div class="form-group">
+          <label for="s-event-name">Veranstaltungsname</label>
+          <input type="text" id="s-event-name" placeholder="Abiball 2025">
+        </div>
+        <div class="form-group">
+          <label for="s-event-date">Datum</label>
+          <input type="text" id="s-event-date" placeholder="21.06.2025">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label for="s-event-location">Veranstaltungsort</label>
+          <input type="text" id="s-event-location" placeholder="Eventlocation, Musterstadt">
+        </div>
+        <div class="form-group">
+          <label for="s-ticket-price">Ticketpreis (EUR)</label>
+          <input type="number" id="s-ticket-price" step="0.01" min="0" placeholder="45.00">
+        </div>
+      </div>
+      <button class="btn btn-primary" id="saveEventBtn">💾 Veranstaltungsdaten speichern</button>
+    </div>
 
+    <!-- Bank-/Zahlungsdaten -->
+    <div class="card">
+      <h2>🏦 Bankverbindung &amp; QR-Code-Einstellungen</h2>
+      <div id="settingsBankAlert"></div>
       <p style="font-size:.9rem;color:var(--muted);margin-bottom:1rem">
-        Exportiere deinen Kontoauszug als CSV-Datei aus deinem Online-Banking und lade sie hier hoch.
-        Das System ordnet Zahlungen automatisch den Bestellungen zu.
+        Diese Daten werden für den SEPA-Girocode (EPC-QR-Code) auf der Zahlungsseite verwendet.
       </p>
-
-      <div class="form-group">
-        <label for="statementFile">CSV-Datei (max. 5 MB)</label>
-        <input type="file" id="statementFile" accept=".csv,.txt">
+      <div class="settings-grid">
+        <div class="form-group" style="grid-column:1/-1">
+          <label for="s-bank-name">Kontoinhaber / Empfängername</label>
+          <input type="text" id="s-bank-name" placeholder="Abiball-Komitee e.V.">
+        </div>
+        <div class="form-group">
+          <label for="s-bank-iban">IBAN</label>
+          <input type="text" id="s-bank-iban" placeholder="DE00 1234 5678 9012 3456 78">
+        </div>
+        <div class="form-group">
+          <label for="s-bank-bic">BIC / SWIFT</label>
+          <input type="text" id="s-bank-bic" placeholder="XXXXXXXX">
+        </div>
       </div>
-
-      <button class="btn btn-primary" id="uploadBtn">Hochladen &amp; prüfen</button>
+      <button class="btn btn-primary" id="saveBankBtn">💾 Bankdaten speichern</button>
     </div>
 
-    <!-- Zahlungsliste -->
+    <!-- Vorschau -->
     <div class="card">
-      <h2>💳 Zahlungsübersicht</h2>
-      <div id="paymentsAlert"></div>
-      <div style="overflow-x:auto">
-        <table id="paymentsTable">
-          <thead>
-            <tr>
-              <th>Datum</th>
-              <th>Absender</th>
-              <th>Verwendungszweck</th>
-              <th>Betrag</th>
-              <th>Zuordnung</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="paymentsTbody">
-            <tr><td colspan="7" style="text-align:center;color:var(--muted)">Lade…</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <h2>👁 Aktuelle Konfiguration</h2>
+      <pre id="settingsPreview" style="background:#f5f5f5;padding:1rem;border-radius:var(--radius);font-size:.85rem;overflow-x:auto">Lade…</pre>
     </div>
 
-  </div><!-- /tab-payments -->
+  </div><!-- /tab-settings -->
 
 </div><!-- /container -->
 

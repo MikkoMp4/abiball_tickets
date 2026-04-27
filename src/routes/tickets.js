@@ -7,24 +7,22 @@
  */
 const express = require('express');
 const router  = express.Router();
-const { getDb } = require('../database');
+const { getDb, getSettings } = require('../database');
 const { buildEpcPayload }   = require('../utils/epcGenerator');
 const { generateQrDataUrl } = require('../utils/qrGenerator');
 
-// Ticket-Konfiguration (Platzhalter – kann über .env oder DB konfiguriert werden)
-const TICKET_CONFIG = {
-  price:      45.00,   // EUR pro Ticket
-  event:      'Abiball 2025',
-  location:   'Eventlocation, Musterstadt',
-  date:       '21.06.2025',
-  iban:       process.env.BANK_IBAN  || 'DE00 1234 5678 9012 3456 78',
-  bic:        process.env.BANK_BIC   || 'XXXXXXXX',
-  accountName: process.env.BANK_NAME || 'Abiball-Komitee e.V.',
-};
-
 // ── GET /api/tickets/config ──────────────────────────────────────────────────
 router.get('/config', (req, res) => {
-  res.json(TICKET_CONFIG);
+  const s = getSettings();
+  res.json({
+    price:       parseFloat(s.ticket_price || '45'),
+    event:       s.event_name     || 'Abiball',
+    location:    s.event_location || '',
+    date:        s.event_date     || '',
+    iban:        s.bank_iban      || '',
+    bic:         s.bank_bic       || '',
+    accountName: s.bank_name      || '',
+  });
 });
 
 // ── POST /api/tickets/order ──────────────────────────────────────────────────
@@ -36,6 +34,14 @@ router.post('/order', async (req, res) => {
   }
 
   const db = getDb();
+  const s  = getSettings();
+  const TICKET_CONFIG = {
+    price:       parseFloat(s.ticket_price || '45'),
+    iban:        s.bank_iban  || '',
+    bic:         s.bank_bic   || '',
+    accountName: s.bank_name  || '',
+  };
+
   const person = db.prepare('SELECT * FROM persons WHERE id = ?').get(personId);
   if (!person) return res.status(404).json({ error: 'Person nicht gefunden' });
 

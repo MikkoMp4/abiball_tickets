@@ -45,6 +45,7 @@ app.use(staticLimiter, express.static(path.join(__dirname, 'public')));
 
 // API-Routen
 app.use('/api/admin',          apiLimiter, require('./src/routes/admin'));
+app.use('/api/admin/settings', apiLimiter, require('./src/routes/settings'));
 app.use('/api/codes',          verifyLimiter, require('./src/routes/codes'));
 app.use('/api/tickets',        apiLimiter, require('./src/routes/tickets'));
 app.use('/api/payments',       apiLimiter, require('./src/routes/payments'));
