@@ -226,13 +226,11 @@ function renderOrders(orders) {
     return;
   }
 
-  // Each order = 2 rows: summary (always visible) + detail (collapsed)
   tbody.innerHTML = filtered.map(o => {
     const ticketCount = (o.tickets || []).length;
     const paidCount   = (o.tickets || []).filter(t => t.ticket_paid).length;
     const splitIcon   = o.split_payment ? ' 💳' : '';
 
-    // Whole-order mark-paid button
     let markPaidBtn = '';
     if (o.paid !== 1) {
       const remaining = o.paid === 2
@@ -244,14 +242,12 @@ function renderOrders(orders) {
       markPaidBtn = `<button class="btn btn-success" style="padding:.25rem .6rem;font-size:.78rem;white-space:nowrap" onclick="event.stopPropagation();markPaid(${o.id},this)">${label}</button>`;
     }
 
-    // Ticket detail rows (inside collapsible)
     const ticketRows = (o.tickets || []).map((t, i) => {
       const splitRef = o.split_payment && t.split_ref
         ? `<code style="font-size:.7rem;color:var(--muted);display:block">${esc(t.split_ref)}</code>`
         : '';
       const statusBadge = o.split_payment ? splitTicketBadge(t) : '';
 
-      // Per-ticket mark-paid: show for split orders (unpaid) OR for any order where ticket is unpaid
       const canMarkPaid = !t.ticket_paid && o.paid !== 1;
       const ticketPaidBtn = canMarkPaid
         ? `<button class="btn btn-success" style="padding:.18rem .4rem;font-size:.72rem;white-space:nowrap" onclick="adminMarkTicketPaid(${o.id},${t.id},this)" title="Ticket als bezahlt markieren">✓ bezahlt</button>`
@@ -276,7 +272,6 @@ function renderOrders(orders) {
 
     const detailId = `order-detail-${o.id}`;
 
-    // Summary row (clickable)
     const summaryRow = `
       <tr class="order-summary-row" onclick="toggleOrderDetail('${detailId}', this)"
           style="cursor:pointer;user-select:none" title="Klicken zum Aufklappen">
@@ -294,7 +289,6 @@ function renderOrders(orders) {
         <td onclick="event.stopPropagation()">${markPaidBtn}</td>
       </tr>`;
 
-    // Detail row (hidden by default)
     const detailRow = `
       <tr id="${detailId}" style="display:none">
         <td colspan="8" style="padding:0;border-top:none">
@@ -474,7 +468,7 @@ async function loadSettings() {
     document.getElementById('s-event-date').value     = s.event_date     || '';
     document.getElementById('s-event-location').value = s.event_location || '';
     document.getElementById('s-ticket-price').value   = s.ticket_price   || '';
-    document.getElementById('s-bank-name').value      = s.bank_recipient || '';
+    document.getElementById('s-bank-name').value      = s.bank_name      || '';
     document.getElementById('s-bank-iban').value      = s.bank_iban      || '';
     document.getElementById('s-bank-bic').value       = s.bank_bic       || '';
     document.getElementById('settingsPreview').textContent = JSON.stringify(s, null, 2);
@@ -493,7 +487,12 @@ async function loadSettings() {
 function setupSettingsSave() {
   document.getElementById('saveEventBtn')?.addEventListener('click', async () => {
     clearAlert('settingsEventAlert');
-    const body = { event_name: document.getElementById('s-event-name').value, event_date: document.getElementById('s-event-date').value, event_location: document.getElementById('s-event-location').value, ticket_price: parseFloat(document.getElementById('s-ticket-price').value) || null };
+    const body = {
+      event_name:     document.getElementById('s-event-name').value,
+      event_date:     document.getElementById('s-event-date').value,
+      event_location: document.getElementById('s-event-location').value,
+      ticket_price:   parseFloat(document.getElementById('s-ticket-price').value) || null,
+    };
     try {
       const res = await fetch('/api/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (res.ok) showAlert('settingsEventAlert', '✅ Gespeichert.', 'success');
@@ -503,7 +502,12 @@ function setupSettingsSave() {
   });
   document.getElementById('saveBankBtn')?.addEventListener('click', async () => {
     clearAlert('settingsBankAlert');
-    const body = { bank_recipient: document.getElementById('s-bank-name').value, bank_iban: document.getElementById('s-bank-iban').value, bank_bic: document.getElementById('s-bank-bic').value };
+    // FIX: key muss 'bank_name' sein (nicht 'bank_recipient') damit ALLOWED_KEYS in settings.js greift
+    const body = {
+      bank_name: document.getElementById('s-bank-name').value,
+      bank_iban: document.getElementById('s-bank-iban').value,
+      bank_bic:  document.getElementById('s-bank-bic').value,
+    };
     try {
       const res = await fetch('/api/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (res.ok) showAlert('settingsBankAlert', '✅ Gespeichert.', 'success');

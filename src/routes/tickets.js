@@ -16,7 +16,7 @@ const { buildEpcPayload }              = require('../utils/epcGenerator');
 const { generateQrDataUrl, generateQrBufferForTicket } = require('../utils/qrGenerator');
 const { sendSingleTicketEmail }        = require('../utils/emailSender');
 
-// ── GET /api/tickets/config ────────────────────────────────────────────────
+// ── GET /api/tickets/config ────────────────────────────────────────────────────────
 router.get('/config', (req, res) => {
   const s = getSettings();
   res.json({
@@ -30,7 +30,7 @@ router.get('/config', (req, res) => {
   });
 });
 
-// ── POST /api/tickets/order ───────────────────────────────────────────────
+// ── POST /api/tickets/order ─────────────────────────────────────────────────────────
 router.post('/order', async (req, res) => {
   const { personId, tickets } = req.body;
   if (!personId || !Array.isArray(tickets) || tickets.length === 0)
@@ -117,7 +117,7 @@ router.post('/order', async (req, res) => {
   });
 });
 
-// ── POST /api/tickets/order/:orderId/enable-split ────────────────────────────
+// ── POST /api/tickets/order/:orderId/enable-split ──────────────────────────────────
 router.post('/order/:orderId/enable-split', async (req, res) => {
   const { code } = req.body;
   if (!code) return res.status(400).json({ error: 'code erforderlich' });
@@ -158,7 +158,7 @@ router.post('/order/:orderId/enable-split', async (req, res) => {
   res.json({ ok: true, splitEpcQrs: result });
 });
 
-// ── POST /api/tickets/order/:orderId/disable-split ───────────────────────────
+// ── POST /api/tickets/order/:orderId/disable-split ─────────────────────────────────
 router.post('/order/:orderId/disable-split', async (req, res) => {
   const { code } = req.body;
   if (!code) return res.status(400).json({ error: 'code erforderlich' });
@@ -179,7 +179,7 @@ router.post('/order/:orderId/disable-split', async (req, res) => {
   res.json({ ok: true });
 });
 
-// ── POST /api/tickets/order/:orderId/add ─────────────────────────────────────
+// ── POST /api/tickets/order/:orderId/add ─────────────────────────────────────────────────────
 router.post('/order/:orderId/add', async (req, res) => {
   const { code, ticketName, ticketEmail } = req.body;
   const { orderId } = req.params;
@@ -236,7 +236,7 @@ router.post('/order/:orderId/add', async (req, res) => {
   res.json({ ok: true, newTotalEur: newTotal, ticket: newTicket, splitRef, splitEpcQr });
 });
 
-// ── GET /api/tickets/my-order?code=CODE ──────────────────────────────────────
+// ── GET /api/tickets/my-order?code=CODE ──────────────────────────────────────────────────
 router.get('/my-order', async (req, res) => {
   const { code } = req.query;
   if (!code) return res.status(400).json({ error: 'Code fehlt' });
@@ -252,11 +252,9 @@ router.get('/my-order', async (req, res) => {
 
   const tickets = db.prepare('SELECT * FROM order_tickets WHERE order_id = ?').all(order.id);
 
-  // Restbetrag berechnen
   const paidAmount   = parseFloat(order.paid_amount || 0);
   const remaining    = Math.max(0, parseFloat(order.total_eur) - paidAmount);
 
-  // EPC-QR für Restbetrag (gemeinsame Zahlung)
   let epcQr = null;
   if (order.paid !== 1 && remaining > 0) {
     const s = getSettings();
@@ -272,16 +270,12 @@ router.get('/my-order', async (req, res) => {
     epcQr = await generateQrDataUrl(order.epc_blob);
   }
 
-  // Pro Ticket: Split-EPC-QR (nur wenn nicht bezahlt) + Ticket-QR-Code (immer, für QR-Tab)
   const ticketsWithQr = await Promise.all(tickets.map(async t => {
-    // Split-Zahlungs-QR: nur wenn Split aktiv und Ticket noch nicht bezahlt
     let splitEpcQr = null;
     if (t.split_epc_blob && !t.ticket_paid) {
       splitEpcQr = await generateQrDataUrl(t.split_epc_blob);
     }
 
-    // Ticket-QR (der eigentliche Einlass-QR): immer generieren damit Nutzer ihn im QR-Tab sieht.
-    // generateQrBufferForTicket erzeugt/erneuert qr_token in der DB und gibt PNG-Buffer zurück.
     let ticketQrDataUrl = null;
     try {
       const qrBuf = await generateQrBufferForTicket(db, t, { orderId: order.id, personCode: person.code });
@@ -310,7 +304,7 @@ router.get('/my-order', async (req, res) => {
   });
 });
 
-// ── PATCH /api/tickets/order/:orderId/ticket/:ticketId ───────────────────────
+// ── PATCH /api/tickets/order/:orderId/ticket/:ticketId ─────────────────────────────────
 router.patch('/order/:orderId/ticket/:ticketId', async (req, res) => {
   const { code, ticketName, ticketEmail } = req.body;
   const { orderId, ticketId } = req.params;
@@ -361,7 +355,7 @@ router.patch('/order/:orderId/ticket/:ticketId', async (req, res) => {
   res.json({ success: true, emailChanged, emailResent, paid: order.paid === 1 });
 });
 
-// ── DELETE /api/tickets/order/:orderId/ticket/:ticketId ──────────────────────
+// ── DELETE /api/tickets/order/:orderId/ticket/:ticketId ────────────────────────────────
 router.delete('/order/:orderId/ticket/:ticketId', (req, res) => {
   const { code } = req.body;
   const { orderId, ticketId } = req.params;
@@ -402,7 +396,7 @@ router.delete('/order/:orderId/ticket/:ticketId', (req, res) => {
   res.json({ ok: true, newTotalEur: newTotal });
 });
 
-// ── POST /api/tickets/validate ───────────────────────────────────────────────
+// ── POST /api/tickets/validate ─────────────────────────────────────────────────────────────────
 router.post('/validate', (req, res) => {
   const { token } = req.body;
   if (!token) return res.status(400).json({ valid: false, error: 'Token fehlt' });
@@ -416,8 +410,11 @@ router.post('/validate', (req, res) => {
     'WHERE ot.qr_token = ?'
   ).get(token);
 
-  if (!ticket)      return res.json({ valid: false, reason: 'Unbekanntes Token' });
-  if (!ticket.paid) return res.json({ valid: false, reason: 'Noch nicht bezahlt', name: ticket.ticket_name });
+  if (!ticket)            return res.json({ valid: false, reason: 'Unbekanntes Token' });
+  // BUG FIX: paid=2 (Teilzahlung) muss als nicht vollständig bezahlt behandelt werden.
+  // Vorher: !ticket.paid  → war true bei paid=0 aber false bei paid=2, was Teilzahler durchlässt.
+  // Jetzt:  ticket.paid !== 1  → nur vollständig bezahlte Bestellungen kommen rein.
+  if (ticket.paid !== 1)  return res.json({ valid: false, reason: 'Noch nicht bezahlt', name: ticket.ticket_name });
 
   res.json({
     valid:      true,
@@ -429,7 +426,7 @@ router.post('/validate', (req, res) => {
   });
 });
 
-// ── GET /api/tickets/order/:personId (legacy) ─────────────────────────────────
+// ── GET /api/tickets/order/:personId (legacy) ─────────────────────────────────────────────────
 router.get('/order/:personId', async (req, res) => {
   const db    = getDb();
   const order = db.prepare(
