@@ -8,69 +8,111 @@
   <style>
     /* ── Login Overlay ───────────────────────────────────────────── */
     #loginOverlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(10, 10, 20, 0.85);
+      position: fixed; inset: 0;
+      background: rgba(10,10,20,0.85);
       backdrop-filter: blur(6px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      display: flex; align-items: center; justify-content: center;
       z-index: 9999;
     }
     #loginOverlay .login-box {
-      background: #fff;
-      border-radius: 12px;
-      padding: 2.5rem 2rem;
-      width: 100%;
-      max-width: 360px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
-      text-align: center;
+      background: #fff; border-radius: 12px;
+      padding: 2.5rem 2rem; width: 100%; max-width: 360px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4); text-align: center;
     }
-    #loginOverlay h2 {
-      margin-bottom: 0.25rem;
-      font-size: 1.3rem;
-    }
-    #loginOverlay p {
-      color: #666;
-      font-size: 0.9rem;
-      margin-bottom: 1.5rem;
-    }
+    #loginOverlay h2  { margin-bottom: .25rem; font-size: 1.3rem; }
+    #loginOverlay p   { color: #666; font-size: .9rem; margin-bottom: 1.5rem; }
     #loginOverlay input[type=password] {
-      width: 100%;
-      padding: 0.75rem 1rem;
-      font-size: 1.1rem;
-      letter-spacing: 0.2em;
-      border: 1.5px solid #ddd;
-      border-radius: 8px;
-      margin-bottom: 1rem;
-      text-align: center;
-      outline: none;
-      transition: border-color 0.2s;
+      width: 100%; padding: .75rem 1rem; font-size: 1.1rem;
+      letter-spacing: .2em; border: 1.5px solid #ddd; border-radius: 8px;
+      margin-bottom: 1rem; text-align: center; outline: none;
+      transition: border-color .2s;
     }
-    #loginOverlay input[type=password]:focus {
-      border-color: var(--primary, #2563eb);
-    }
+    #loginOverlay input[type=password]:focus { border-color: var(--primary, #2563eb); }
     #loginOverlay .btn-login {
-      width: 100%;
-      padding: 0.75rem;
-      background: var(--primary, #2563eb);
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
+      width: 100%; padding: .75rem;
+      background: var(--primary, #2563eb); color: #fff;
+      border: none; border-radius: 8px; font-size: 1rem;
+      font-weight: 600; cursor: pointer; transition: background .2s;
     }
-    #loginOverlay .btn-login:hover { background: var(--primary-dark, #1d4ed8); }
-    #loginOverlay .btn-login:disabled { opacity: 0.6; cursor: not-allowed; }
+    #loginOverlay .btn-login:hover    { background: var(--primary-dark, #1d4ed8); }
+    #loginOverlay .btn-login:disabled { opacity: .6; cursor: not-allowed; }
     #loginError {
-      color: #dc2626;
-      font-size: 0.875rem;
-      min-height: 1.25rem;
-      margin-bottom: 0.5rem;
+      color: #dc2626; font-size: .875rem;
+      min-height: 1.25rem; margin-bottom: .5rem;
     }
     #adminContent { display: none; }
+
+    /* ── Danger Zone styles ─────────────────────────────────────── */
+    .danger-zone-card {
+      border: 2px solid #dc2626;
+      border-radius: 10px;
+      background: #fff5f5;
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .danger-zone-card h2 {
+      color: #b91c1c;
+      display: flex; align-items: center; gap: .5rem;
+      margin-bottom: .75rem;
+    }
+    .danger-pw-row {
+      display: flex; gap: .75rem; flex-wrap: wrap;
+      align-items: flex-end; margin-bottom: 1.25rem;
+    }
+    .danger-pw-row label { font-weight: 600; font-size: .9rem; display: block; margin-bottom: .3rem; }
+    .danger-pw-row input {
+      padding: .55rem .9rem; border: 1.5px solid #fca5a5;
+      border-radius: 6px; font-size: .95rem; width: 200px;
+      background: #fff;
+    }
+    .danger-pw-row input:focus { outline: none; border-color: #dc2626; }
+    .danger-actions { display: flex; flex-direction: column; gap: 1rem; }
+    .danger-action-row {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: .75rem;
+      padding: .9rem 1rem;
+      background: #fff;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+    }
+    .danger-action-row .action-info { flex: 1; }
+    .danger-action-row .action-info strong { display: block; font-size: .95rem; color: #1f2937; }
+    .danger-action-row .action-info span  { font-size: .82rem; color: #6b7280; }
+    .danger-action-row .action-inputs { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+    .danger-action-row input.id-input {
+      width: 90px; padding: .4rem .6rem;
+      border: 1px solid #ddd; border-radius: 6px;
+      font-size: .9rem;
+    }
+    .btn-danger-action {
+      padding: .45rem 1rem;
+      background: #dc2626; color: #fff;
+      border: none; border-radius: 6px;
+      font-weight: 600; font-size: .875rem;
+      cursor: pointer; transition: background .2s;
+      white-space: nowrap;
+    }
+    .btn-danger-action:hover    { background: #b91c1c; }
+    .btn-danger-action:disabled { opacity: .55; cursor: not-allowed; }
+    .btn-nuclear {
+      padding: .55rem 1.25rem;
+      background: #7f1d1d; color: #fff;
+      border: none; border-radius: 6px;
+      font-weight: 700; font-size: .9rem;
+      cursor: pointer; transition: background .2s;
+      width: 100%;
+    }
+    .btn-nuclear:hover    { background: #450a0a; }
+    .btn-nuclear:disabled { opacity: .55; cursor: not-allowed; }
+    #dangerResult {
+      margin-top: 1rem;
+      padding: .75rem 1rem;
+      border-radius: 8px;
+      font-size: .9rem;
+      display: none;
+    }
+    #dangerResult.success { background: #f0fdf4; border: 1px solid #86efac; color: #166534; display: block; }
+    #dangerResult.error   { background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; display: block; }
   </style>
 </head>
 <body>
@@ -108,11 +150,11 @@
     <button class="tab-btn" data-tab="orders">🎟 Bestellungen</button>
     <button class="tab-btn" data-tab="persons">👥 Personen</button>
     <button class="tab-btn" data-tab="settings">⚙️ Einstellungen</button>
+    <button class="tab-btn" data-tab="danger" style="color:#dc2626;font-weight:700">⚠️ Danger Zone</button>
   </div>
 
   <!-- ── TAB: Dashboard ──────────────────────────────────────────────── -->
   <div class="tab-pane active" id="tab-dashboard">
-
     <div class="stats-grid" id="statsGrid">
       <div class="stat-card"><div class="stat-value" id="st-persons">–</div><div class="stat-label">Personen</div></div>
       <div class="stat-card"><div class="stat-value" id="st-orders">–</div><div class="stat-label">Bestellungen</div></div>
@@ -123,72 +165,46 @@
       <div class="stat-card"><div class="stat-value" id="st-pending-rev">–</div><div class="stat-label">Offen (EUR)</div></div>
       <div class="stat-card"><div class="stat-value" id="st-payments">–</div><div class="stat-label">Zahlungseingänge</div></div>
     </div>
-
     <div class="card">
       <h2>⏳ Offene Zahlungen (noch nicht bezahlt)</h2>
       <div id="dashUnpaidAlert"></div>
       <div style="overflow-x:auto">
-        <table id="dashUnpaidTable">
-          <thead>
-            <tr><th>Person</th><th>Code</th><th>Tickets</th><th>Betrag</th><th>Bestellt am</th></tr>
-          </thead>
-          <tbody id="dashUnpaidTbody">
-            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Lade…</td></tr>
-          </tbody>
+        <table><thead><tr><th>Person</th><th>Code</th><th>Tickets</th><th>Betrag</th><th>Bestellt am</th></tr></thead>
+          <tbody id="dashUnpaidTbody"><tr><td colspan="5" style="text-align:center;color:var(--muted)">Lade…</td></tr></tbody>
         </table>
       </div>
     </div>
-
-  </div><!-- /tab-dashboard -->
+  </div>
 
   <!-- ── TAB: Zahlungen ────────────────────────────────────────────────── -->
   <div class="tab-pane" id="tab-payments">
-
     <div class="card" style="border:2px solid var(--primary)">
       <h2>📄 Kontoauszug als PDF hochladen <span class="badge badge-primary" style="font-size:.75rem;vertical-align:middle">Empfohlen</span></h2>
       <div id="pdfUploadAlert"></div>
-      <p style="font-size:.9rem;color:var(--muted);margin-bottom:1rem">
-        Lade eine oder mehrere Bank-PDF-Dateien hoch. Das System sucht automatisch nach
-        Abiball-Referenznummern und gleicht die Beträge ab.
-      </p>
-      <div class="form-group">
-        <label for="pdfFiles">PDF-Dateien (max. 20 Dateien, je max. 20 MB)</label>
-        <input type="file" id="pdfFiles" accept=".pdf" multiple>
-      </div>
+      <p style="font-size:.9rem;color:var(--muted);margin-bottom:1rem">Lade eine oder mehrere Bank-PDF-Dateien hoch. Das System sucht automatisch nach Abiball-Referenznummern und gleicht die Beträge ab.</p>
+      <div class="form-group"><label for="pdfFiles">PDF-Dateien (max. 20 Dateien, je max. 20 MB)</label><input type="file" id="pdfFiles" accept=".pdf" multiple></div>
       <button class="btn btn-primary" id="pdfUploadBtn">📤 PDFs hochladen &amp; abgleichen</button>
     </div>
-
     <div class="card">
       <h2>📊 Kontoauszug als CSV hochladen</h2>
       <div id="csvUploadAlert"></div>
-      <div class="form-group">
-        <label for="statementFile">CSV-Datei (max. 5 MB)</label>
-        <input type="file" id="statementFile" accept=".csv,.txt">
-      </div>
+      <div class="form-group"><label for="statementFile">CSV-Datei (max. 5 MB)</label><input type="file" id="statementFile" accept=".csv,.txt"></div>
       <button class="btn btn-outline" id="csvUploadBtn">Hochladen &amp; prüfen</button>
     </div>
-
     <div class="card" id="pdfResultCard" style="display:none">
       <h2>📋 Ergebnis der PDF-Verarbeitung</h2>
       <div id="pdfResultContent"></div>
     </div>
-
     <div class="card">
       <h2>💳 Zahlungsübersicht</h2>
       <div id="paymentsAlert"></div>
       <div style="overflow-x:auto">
-        <table id="paymentsTable">
-          <thead>
-            <tr><th>Datum</th><th>Absender</th><th>Verwendungszweck</th><th>Betrag</th><th>Zuordnung</th><th>Status</th><th></th></tr>
-          </thead>
-          <tbody id="paymentsTbody">
-            <tr><td colspan="7" style="text-align:center;color:var(--muted)">Lade…</td></tr>
-          </tbody>
+        <table><thead><tr><th>Datum</th><th>Absender</th><th>Verwendungszweck</th><th>Betrag</th><th>Zuordnung</th><th>Status</th><th></th></tr></thead>
+          <tbody id="paymentsTbody"><tr><td colspan="7" style="text-align:center;color:var(--muted)">Lade…</td></tr></tbody>
         </table>
       </div>
     </div>
-
-  </div><!-- /tab-payments -->
+  </div>
 
   <!-- ── TAB: Bestellungen ──────────────────────────────────────────────── -->
   <div class="tab-pane" id="tab-orders">
@@ -198,29 +214,21 @@
       <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1rem;align-items:center">
         <label style="font-weight:600;font-size:.9rem">Filter:</label>
         <select id="ordersFilter" style="padding:.4rem .7rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.9rem">
-          <option value="all">Alle</option>
-          <option value="paid">Bezahlt</option>
-          <option value="unpaid">Offen</option>
-          <option value="sent">QR gesendet</option>
+          <option value="all">Alle</option><option value="paid">Bezahlt</option>
+          <option value="unpaid">Offen</option><option value="sent">QR gesendet</option>
         </select>
         <button class="btn btn-outline" style="padding:.35rem .85rem;font-size:.85rem" onclick="loadOrders()">&#x1F504; Aktualisieren</button>
       </div>
       <div style="overflow-x:auto">
-        <table id="ordersTable">
-          <thead>
-            <tr><th>Person</th><th>E-Mail</th><th>Code</th><th>Tickets</th><th>Betrag</th><th>Status</th><th>Bestellt</th><th></th></tr>
-          </thead>
-          <tbody id="ordersTbody">
-            <tr><td colspan="8" style="text-align:center;color:var(--muted)">Lade…</td></tr>
-          </tbody>
+        <table><thead><tr><th>Person</th><th>E-Mail</th><th>Code</th><th>Tickets</th><th>Betrag</th><th>Status</th><th>Bestellt</th><th></th></tr></thead>
+          <tbody id="ordersTbody"><tr><td colspan="8" style="text-align:center;color:var(--muted)">Lade…</td></tr></tbody>
         </table>
       </div>
     </div>
-  </div><!-- /tab-orders -->
+  </div>
 
   <!-- ── TAB: Personen ────────────────────────────────────────────────── -->
   <div class="tab-pane" id="tab-persons">
-
     <div class="card">
       <h2>&#x2795; Schüler &amp; Tickets erfassen</h2>
       <div id="genAlert"></div>
@@ -228,98 +236,155 @@
         Füge pro Zeile eine Person ein: <code>Name; E-Mail (optional); Anzahl Tickets</code><br>
         Beispiel: <code>Max Mustermann; max@schule.de; 2</code>
       </p>
-      <div class="form-group">
-        <label for="personsBulk">Personen (eine pro Zeile)</label>
+      <div class="form-group"><label for="personsBulk">Personen (eine pro Zeile)</label>
         <textarea id="personsBulk" rows="8" placeholder="Max Mustermann; max@schule.de; 2
 Erika Muster; ; 1
 Anna Schmidt; anna@example.com; 3"></textarea>
       </div>
       <button class="btn btn-primary" id="generateBtn">Codes generieren</button>
     </div>
-
     <div class="card">
       <h2>📥 Codes exportieren</h2>
-      <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
+      <div style="display:flex;gap:.75rem;flex-wrap:wrap">
         <a class="btn btn-outline" href="/api/admin/export/csv" download>⬇ CSV herunterladen</a>
         <a class="btn btn-outline" href="/api/admin/export/excel" download>⬇ Excel herunterladen</a>
       </div>
     </div>
-
     <div class="card">
       <h2>📋 Alle Personen</h2>
       <div id="personsAlert"></div>
       <div style="overflow-x:auto">
-        <table id="personsTable">
-          <thead>
-            <tr><th>Name</th><th>E-Mail</th><th>Code</th><th># Tickets</th><th>Bestellt</th><th>Bezahlt</th><th>Erstellt</th><th></th></tr>
-          </thead>
-          <tbody id="personsTbody">
-            <tr><td colspan="8" style="text-align:center;color:var(--muted)">Lade…</td></tr>
-          </tbody>
+        <table><thead><tr><th>Name</th><th>E-Mail</th><th>Code</th><th># Tickets</th><th>Bestellt</th><th>Bezahlt</th><th>Erstellt</th><th></th></tr></thead>
+          <tbody id="personsTbody"><tr><td colspan="8" style="text-align:center;color:var(--muted)">Lade…</td></tr></tbody>
         </table>
       </div>
     </div>
-
-  </div><!-- /tab-persons -->
+  </div>
 
   <!-- ── TAB: Einstellungen ───────────────────────────────────────────── -->
   <div class="tab-pane" id="tab-settings">
-
     <div class="card">
       <h2>🎉 Veranstaltungsinfos</h2>
       <div id="settingsEventAlert"></div>
       <div class="settings-grid">
-        <div class="form-group">
-          <label for="s-event-name">Veranstaltungsname</label>
-          <input type="text" id="s-event-name" placeholder="Abiball 2026">
-        </div>
-        <div class="form-group">
-          <label for="s-event-date">Datum</label>
-          <input type="text" id="s-event-date" placeholder="20.06.2026">
-        </div>
-        <div class="form-group" style="grid-column:1/-1">
-          <label for="s-event-location">Veranstaltungsort</label>
-          <input type="text" id="s-event-location" placeholder="Eventlocation, Musterstadt">
-        </div>
-        <div class="form-group">
-          <label for="s-ticket-price">Ticketpreis (EUR)</label>
-          <input type="number" id="s-ticket-price" step="0.01" min="0" placeholder="45.00">
-        </div>
+        <div class="form-group"><label for="s-event-name">Veranstaltungsname</label><input type="text" id="s-event-name" placeholder="Abiball 2026"></div>
+        <div class="form-group"><label for="s-event-date">Datum</label><input type="text" id="s-event-date" placeholder="20.06.2026"></div>
+        <div class="form-group" style="grid-column:1/-1"><label for="s-event-location">Veranstaltungsort</label><input type="text" id="s-event-location" placeholder="Eventlocation, Musterstadt"></div>
+        <div class="form-group"><label for="s-ticket-price">Ticketpreis (EUR)</label><input type="number" id="s-ticket-price" step="0.01" min="0" placeholder="45.00"></div>
       </div>
       <button class="btn btn-primary" id="saveEventBtn">💾 Veranstaltungsdaten speichern</button>
     </div>
-
     <div class="card">
       <h2>🏦 Bankverbindung &amp; QR-Code-Einstellungen</h2>
       <div id="settingsBankAlert"></div>
       <div class="settings-grid">
-        <div class="form-group" style="grid-column:1/-1">
-          <label for="s-bank-name">Kontoinhaber / Empfängername</label>
-          <input type="text" id="s-bank-name" placeholder="Abiball-Komitee e.V.">
-        </div>
-        <div class="form-group">
-          <label for="s-bank-iban">IBAN</label>
-          <input type="text" id="s-bank-iban" placeholder="DE00 1234 5678 9012 3456 78">
-        </div>
-        <div class="form-group">
-          <label for="s-bank-bic">BIC / SWIFT</label>
-          <input type="text" id="s-bank-bic" placeholder="XXXXXXXX">
-        </div>
+        <div class="form-group" style="grid-column:1/-1"><label for="s-bank-name">Kontoinhaber / Empfängername</label><input type="text" id="s-bank-name" placeholder="Abiball-Komitee e.V."></div>
+        <div class="form-group"><label for="s-bank-iban">IBAN</label><input type="text" id="s-bank-iban" placeholder="DE00 1234 5678 9012 3456 78"></div>
+        <div class="form-group"><label for="s-bank-bic">BIC / SWIFT</label><input type="text" id="s-bank-bic" placeholder="XXXXXXXX"></div>
       </div>
       <button class="btn btn-primary" id="saveBankBtn">💾 Bankdaten speichern</button>
     </div>
-
     <div class="card">
       <h2>👁 Aktuelle Konfiguration (Datenbank)</h2>
       <pre id="settingsPreview" style="background:#f5f5f5;padding:1rem;border-radius:var(--radius);font-size:.85rem;overflow-x:auto">Lade…</pre>
     </div>
-
     <div class="card">
       <h2>🐳 Docker-Umgebungsvariablen</h2>
       <div id="envStatusContent">Lade…</div>
     </div>
+  </div>
 
-  </div><!-- /tab-settings -->
+  <!-- ── TAB: DANGER ZONE ─────────────────────────────────────────────── -->
+  <div class="tab-pane" id="tab-danger">
+
+    <div style="background:#7f1d1d;color:#fff;border-radius:10px;padding:1.25rem 1.5rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:1rem">
+      <span style="font-size:2rem">⚠️</span>
+      <div>
+        <strong style="font-size:1.05rem">Danger Zone – nur für Testzwecke</strong><br>
+        <span style="font-size:.88rem;opacity:.85">Alle Aktionen hier sind <u>nicht rückgängig zu machen</u>. Jede Aktion erfordert das separate Danger-Passwort.</span>
+      </div>
+    </div>
+
+    <!-- Shared danger password input -->
+    <div class="danger-zone-card">
+      <h2>🔑 Danger-Passwort</h2>
+      <p style="font-size:.9rem;color:#6b7280;margin-bottom:1rem">Gib hier einmalig das Danger-Passwort ein. Es wird für alle Aktionen auf dieser Seite verwendet.</p>
+      <div class="danger-pw-row">
+        <div>
+          <label for="dangerPwInput">Danger-Passwort</label>
+          <input type="password" id="dangerPwInput" placeholder="••••••••" autocomplete="off">
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete single person -->
+    <div class="danger-zone-card">
+      <h2>🗑 Person löschen</h2>
+      <p style="font-size:.88rem;color:#6b7280;margin-bottom:1rem">Löscht eine Person inkl. aller zugehörigen Bestellungen, Tickets &amp; Zahlungen (Cascade).</p>
+      <div class="danger-action-row">
+        <div class="action-info">
+          <strong>Person nach ID löschen</strong>
+          <span>Findet die Person-ID in der Personen-Tabelle (Tab „Personen“)</span>
+        </div>
+        <div class="action-inputs">
+          <input type="number" class="id-input" id="dangerPersonId" placeholder="ID" min="1">
+          <button class="btn-danger-action" onclick="dangerDeletePerson()">Person löschen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete single order -->
+    <div class="danger-zone-card">
+      <h2>🗑 Bestellung löschen</h2>
+      <p style="font-size:.88rem;color:#6b7280;margin-bottom:1rem">Löscht eine einzelne Bestellung inkl. ihrer Tickets.</p>
+      <div class="danger-action-row">
+        <div class="action-info">
+          <strong>Bestellung nach ID löschen</strong>
+          <span>Findet die Bestellungs-ID in der Bestellungen-Tabelle</span>
+        </div>
+        <div class="action-inputs">
+          <input type="number" class="id-input" id="dangerOrderId" placeholder="ID" min="1">
+          <button class="btn-danger-action" onclick="dangerDeleteOrder()">Bestellung löschen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete single payment -->
+    <div class="danger-zone-card">
+      <h2>🗑 Zahlung löschen</h2>
+      <p style="font-size:.88rem;color:#6b7280;margin-bottom:1rem">Löscht einen Zahlungseingang. Falls zugeordnet, wird die Bestellung auf „unbezahlt“ zurückgesetzt.</p>
+      <div class="danger-action-row">
+        <div class="action-info">
+          <strong>Zahlung nach ID löschen</strong>
+          <span>Findet die Zahlungs-ID in der Zahlungs-Tabelle</span>
+        </div>
+        <div class="action-inputs">
+          <input type="number" class="id-input" id="dangerPaymentId" placeholder="ID" min="1">
+          <button class="btn-danger-action" onclick="dangerDeletePayment()">Zahlung löschen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nuclear option -->
+    <div class="danger-zone-card" style="border-color:#7f1d1d;background:#fff1f1">
+      <h2 style="color:#7f1d1d">☠️ ALLE DATEN LÖSCHEN</h2>
+      <p style="font-size:.88rem;color:#6b7280;margin-bottom:1rem">
+        Löscht <strong>sämtliche</strong> Personen, Bestellungen, Tickets und Zahlungen aus der Datenbank.
+        Diese Aktion ist absolut irreversibel.
+      </p>
+      <p style="font-size:.88rem;font-weight:600;color:#991b1b;margin-bottom:1rem">
+        Zur Bestätigung bitte "ALLES LÖSCHEN" in das Feld eingeben:
+      </p>
+      <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center">
+        <input type="text" id="dangerNuclearConfirm" placeholder='"ALLES LÖSCHEN" eingeben'
+          style="flex:1;min-width:200px;padding:.55rem .9rem;border:1.5px solid #fca5a5;border-radius:6px;font-size:.9rem">
+        <button class="btn-nuclear" id="dangerNuclearBtn" onclick="dangerNuclear()">☠️ Alle Daten unwiderruflich löschen</button>
+      </div>
+    </div>
+
+    <div id="dangerResult"></div>
+
+  </div><!-- /tab-danger -->
 
 </div><!-- /container -->
 </div><!-- /adminContent -->
