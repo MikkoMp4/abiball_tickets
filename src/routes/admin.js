@@ -160,12 +160,15 @@ router.post('/upload-pdf', pdfUpload.array('pdfs', 20), async (req, res) => {
   res.json({ processed: allResults.length, newlyPaid: newlyFullyPaid.length, emailsSent: emailResults, results: allResults });
 });
 
+// ── Gesamte Bestellung als bezahlt markieren ─────────────────────────────────
 router.post('/orders/:id/mark-paid', async (req, res) => {
   const db    = getDb();
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Bestellung nicht gefunden' });
   if (order.paid === 1) return res.json({ ok: true, alreadyPaid: true });
   db.prepare("UPDATE orders SET paid = 1, paid_amount = total_eur, paid_at = COALESCE(paid_at, datetime('now')) WHERE id = ?").run(req.params.id);
+  // Alle Tickets der Bestellung als bezahlt markieren
+  db.prepare('UPDATE order_tickets SET ticket_paid = 1 WHERE order_id = ?').run(req.params.id);
   const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   const person       = db.prepare('SELECT * FROM persons WHERE id = ?').get(updatedOrder.person_id);
   let emailResult = null;
@@ -174,6 +177,53 @@ router.post('/orders/:id/mark-paid', async (req, res) => {
     catch (err) { emailResult = { ok: false, error: err.message }; }
   }
   res.json({ ok: true, email: emailResult });
+});
+
+// ── Einzelnes Ticket als bezahlt markieren ───────────────────────────────────
+router.post('/orders/:orderId/ticket/:ticketId/mark-paid', async (req, res) => {
+  const db     = getDb();
+  const s      = getSettings();
+  const order  = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.orderId);
+  if (!order) return res.status(404).json({ error: 'Bestellung nicht gefunden' });
+
+  const ticket = db.prepare('SELECT * FROM order_tickets WHERE id = ? AND order_id = ?')
+    .get(req.params.ticketId, req.params.orderId);
+  if (!ticket) return res.status(404).json({ error: 'Ticket nicht gefunden' });
+  if (ticket.ticket_paid) return res.json({ ok: true, alreadyPaid: true });
+
+  const ticketPrice = parseFloat(s.ticket_price || '45');
+
+  db.transaction(() => {
+    db.prepare("UPDATE order_tickets SET ticket_paid = 1 WHERE id = ?").run(req.params.ticketId);
+    // paid_amount erhöhen
+    db.prepare("UPDATE orders SET paid_amount = COALESCE(paid_amount, 0) + ?, paid_at = COALESCE(paid_at, datetime('now')) WHERE id = ?")
+      .run(ticketPrice, req.params.orderId);
+    // Prüfen ob alle Tickets bezahlt sind → paid=1, sonst paid=2
+    const total   = db.prepare('SELECT COUNT(*) AS n FROM order_tickets WHERE order_id = ?').get(req.params.orderId).n;
+    const paidCnt = db.prepare('SELECT COUNT(*) AS n FROM order_tickets WHERE order_id = ? AND ticket_paid = 1').get(req.params.orderId).n;
+    const newPaidStatus = paidCnt >= total ? 1 : 2;
+    db.prepare('UPDATE orders SET paid = ? WHERE id = ?').run(newPaidStatus, req.params.orderId);
+  })();
+
+  const updatedOrder  = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.orderId);
+  const person        = db.prepare('SELECT * FROM persons WHERE id = ?').get(order.person_id);
+  let emailResult     = null;
+
+  // E-Mail nur für dieses eine Ticket senden
+  if (person) {
+    try {
+      const { generateQrBufferForTicket } = require('../utils/qrGenerator');
+      const { sendSingleTicketEmail }     = require('../utils/emailSender');
+      const updatedTicket = db.prepare('SELECT * FROM order_tickets WHERE id = ?').get(req.params.ticketId);
+      const qrBuffer = await generateQrBufferForTicket(db, updatedTicket, { orderId: order.id, personCode: person.code });
+      await sendSingleTicketEmail({ to: updatedTicket.ticket_email, personName: updatedTicket.ticket_name, qrBuffer, updated: false });
+      emailResult = { ok: true, sentTo: updatedTicket.ticket_email };
+    } catch (err) {
+      emailResult = { ok: false, error: err.message };
+    }
+  }
+
+  res.json({ ok: true, newPaidStatus: updatedOrder.paid, email: emailResult });
 });
 
 router.delete('/orders/:orderId/ticket/:ticketId', (req, res) => {

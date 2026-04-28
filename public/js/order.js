@@ -25,7 +25,7 @@ function showAlert(box, msg, type = 'danger') {
   box.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
 }
 function fmt(eur) {
-  return eur.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+  return Number(eur).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 }
 function esc(str) {
   return String(str ?? '')
@@ -85,7 +85,6 @@ async function loadManageMode() {
     const data = await res.json();
 
     if (!res.ok) {
-      // Keine Bestellung vorhanden → frisches Formular zeigen
       personInfo.innerHTML =
         `<strong>${esc(person.name)}</strong> &nbsp;|&nbsp; Zugangscode: <code>${esc(code)}</code>` +
         ` &nbsp;|&nbsp; Verfügbare Tickets: <strong>${esc(String(person.num_tickets))}</strong>`;
@@ -100,102 +99,255 @@ async function loadManageMode() {
     orderCard.style.display   = 'none';
     paymentCard.style.display = 'block';
 
-    renderPaymentInfo(data);
-    renderEditSection(data);
+    renderManageTabs(data);
 
   } catch (err) {
     showAlert(alertBox, 'Verbindungsfehler beim Laden der Bestellung.', 'danger');
   }
 }
 
-// ── Zahlungsinfo rendern ──────────────────────────────────────────────────
-function renderPaymentInfo(data) {
-  document.getElementById('payAmount').textContent = fmt(data.order.total_eur);
-  document.getElementById('payIban').textContent   = data.config.iban;
-  document.getElementById('payName').textContent   = data.config.accountName;
-  document.getElementById('payRef').textContent    = data.reference;
+// ── Manage-Mode: Tabs rendern ─────────────────────────────────────────────
+function renderManageTabs(data) {
+  paymentCard.innerHTML = `
+    <div class="manage-tabs">
+      <button class="tab-btn active" data-tab="payment">💳 Zahlung</button>
+      <button class="tab-btn" data-tab="tickets">🎫 Meine QR-Codes</button>
+      <button class="tab-btn" data-tab="edit">✏️ Angaben ändern</button>
+    </div>
+    <div class="tab-content" id="tab-payment"></div>
+    <div class="tab-content" id="tab-tickets" style="display:none"></div>
+    <div class="tab-content" id="tab-edit" style="display:none"></div>
+  `;
 
-  // Haupt-EPC-QR (Gesamtzahlung)
-  const epcBlock = document.getElementById('epcBlock');
-  if (epcBlock) epcBlock.style.display = data.order.split_payment ? 'none' : '';
-  if (data.epcQr && !data.order.split_payment) {
-    const img = document.getElementById('epcQrImg');
-    if (img) { img.src = data.epcQr; img.style.display = 'block'; }
+  // Tab-Styles einmalig injizieren
+  if (!document.getElementById('tabStyles')) {
+    const style = document.createElement('style');
+    style.id = 'tabStyles';
+    style.textContent = `
+      .manage-tabs { display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:1.25rem; border-bottom:2px solid #e0e0e0; padding-bottom:.5rem; }
+      .tab-btn { background:none; border:none; padding:.5rem 1.1rem; border-radius:6px 6px 0 0; cursor:pointer; font-size:.95rem; color:#555; font-weight:500; transition:background .15s,color .15s; }
+      .tab-btn:hover { background:#f0f0f0; color:#222; }
+      .tab-btn.active { background:#fff; color:#1a7a6e; border:2px solid #e0e0e0; border-bottom:2px solid #fff; margin-bottom:-2px; font-weight:700; }
+      .ticket-qr-card { background:#f9f9f9; border-radius:10px; padding:1rem; margin-bottom:.85rem; box-shadow:0 1px 4px rgba(0,0,0,.07); }
+      .paid-chip { display:inline-block; background:#27ae60; color:#fff; border-radius:20px; font-size:.78rem; padding:.15rem .65rem; margin-left:.5rem; vertical-align:middle; }
+      .pending-chip { display:inline-block; background:#e67e22; color:#fff; border-radius:20px; font-size:.78rem; padding:.15rem .65rem; margin-left:.5rem; vertical-align:middle; }
+    `;
+    document.head.appendChild(style);
   }
 
-  // Split-Zahlungsinfos pro Ticket
-  let splitBlock = document.getElementById('splitBlock');
-  if (!splitBlock) {
-    splitBlock = document.createElement('div');
-    splitBlock.id = 'splitBlock';
-    paymentCard.querySelector('.card-body, .card') && paymentCard.appendChild(splitBlock);
-  }
-  splitBlock.innerHTML = '';
-
-  if (data.order.split_payment) {
-    splitBlock.innerHTML = `<p style="margin-top:1rem"><strong>💳 Separat zahlen – jede Person zahlt ihr eigenes Ticket:</strong></p>`;
-    data.tickets.forEach((t, i) => {
-      if (!t.split_ref) return;
-      splitBlock.innerHTML += `
-        <div class="card" style="background:#f9f9f9;box-shadow:none;padding:1rem;margin-bottom:.5rem">
-          <strong>Ticket ${i + 1} – ${esc(t.ticket_name)}</strong>
-          <div style="margin-top:.5rem;font-size:.9rem">
-            <div>Betrag: <strong>${fmt(data.config.price)}</strong></div>
-            <div>Referenz: <code>${esc(t.split_ref)}</code></div>
-          </div>
-          ${t.splitEpcQr ? `<img src="${t.splitEpcQr}" alt="QR ${i+1}" style="margin-top:.5rem;max-width:160px">` : ''}
-        </div>
-      `;
+  paymentCard.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      paymentCard.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      paymentCard.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+      btn.classList.add('active');
+      document.getElementById(`tab-${btn.dataset.tab}`).style.display = 'block';
     });
+  });
+
+  renderTabPayment(data);
+  renderTabQrCodes(data);
+  renderTabEdit(data);
+}
+
+// ── Tab: Zahlung ──────────────────────────────────────────────────────────
+function renderTabPayment(data) {
+  const tab = document.getElementById('tab-payment');
+  const order = data.order;
+  const paidAmount   = parseFloat(data.paidAmount   || 0);
+  const remainingEur = parseFloat(data.remainingEur || 0);
+  const totalEur     = parseFloat(order.total_eur);
+
+  const fullyPaid = order.paid === 1;
+  const partial   = order.paid === 2;
+
+  let statusHtml = '';
+  if (fullyPaid) {
+    statusHtml = `<div style="background:#d4f5e2;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;color:#1a7a2a;font-weight:600">✅ Vollständig bezahlt – Tickets wurden per E-Mail verschickt.</div>`;
+  } else if (partial) {
+    statusHtml = `<div style="background:#fff3cd;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;color:#856404;font-weight:500">⚠️ Teilzahlung erhalten: <strong>${fmt(paidAmount)}</strong> von <strong>${fmt(totalEur)}</strong> – noch ausstehend: <strong>${fmt(remainingEur)}</strong></div>`;
+  }
+
+  // Split-Toggle (nur wenn nicht bezahlt)
+  let splitToggleHtml = '';
+  if (!fullyPaid) {
+    splitToggleHtml = `
+      <div style="margin:1rem 0;padding:.75rem 1rem;background:#f0f7ff;border-radius:8px;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+        <input type="checkbox" id="splitToggle" style="width:18px;height:18px;cursor:pointer" ${order.split_payment ? 'checked' : ''}>
+        <label for="splitToggle" style="cursor:pointer;margin:0;font-weight:500">
+          💳 <strong>Separat zahlen</strong>
+          <span style="font-weight:400;font-size:.85rem;color:#555"> – jede Person überweist ihr Ticket einzeln</span>
+        </label>
+        <span id="splitSpinner" style="display:none;font-size:.85rem;color:#888">Lädt…</span>
+      </div>
+    `;
+  }
+
+  // Zahlungsbetrag = Restbetrag (wenn Teilzahlung) oder Gesamtbetrag
+  const displayAmount = partial ? remainingEur : totalEur;
+
+  tab.innerHTML = `
+    ${statusHtml}
+    ${splitToggleHtml}
+    <div id="paymentDetails">
+      ${renderPaymentDetails(data, displayAmount)}
+    </div>
+  `;
+
+  if (!fullyPaid) {
+    const splitToggle = document.getElementById('splitToggle');
+    splitToggle.addEventListener('change', () => toggleSplit(splitToggle.checked, data));
   }
 }
 
-// ── Edit-Sektion rendern ──────────────────────────────────────────────────
-function renderEditSection(data) {
-  const paidBadge = data.order.paid
-    ? '<span class="badge" style="background:#27ae60;color:#fff;margin-left:.5rem">✓ Bezahlt</span>'
-    : '<span class="badge" style="background:#e67e22;color:#fff;margin-left:.5rem">Ausstehend</span>';
+function renderPaymentDetails(data, displayAmount) {
+  const order = data.order;
 
-  let editSection = document.getElementById('editSection');
-  if (!editSection) {
-    editSection = document.createElement('div');
-    editSection.id = 'editSection';
-    editSection.style.cssText = 'margin-top:1.5rem';
-    paymentCard.after(editSection);
+  if (order.split_payment) {
+    let html = `<p style="margin-bottom:.75rem"><strong>💳 Separat zahlen – jede Person überweist ihr Ticket einzeln:</strong></p>`;
+    data.tickets.forEach((t, i) => {
+      if (!t.split_ref) return;
+      const isPaid = !!t.ticket_paid;
+      html += `
+        <div class="ticket-qr-card">
+          <strong>Ticket ${i + 1} – ${esc(t.ticket_name)}</strong>
+          ${isPaid ? '<span class="paid-chip">✓ Bezahlt</span>' : '<span class="pending-chip">Ausstehend</span>'}
+          ${!isPaid ? `
+            <div style="margin-top:.5rem;font-size:.9rem">
+              <div>Betrag: <strong>${fmt(data.config.price)}</strong></div>
+              <div>Referenz: <code>${esc(t.split_ref)}</code></div>
+            </div>
+            ${t.splitEpcQr ? `<img src="${t.splitEpcQr}" alt="Zahle QR ${i+1}" style="margin-top:.5rem;max-width:160px">` : ''}
+          ` : '<div style="margin-top:.35rem;font-size:.88rem;color:#555">Zahlung eingegangen – Ticket wurde per E-Mail zugestellt.</div>'}
+        </div>
+      `;
+    });
+    return html;
   }
 
+  // Gemeinsame Überweisung
+  return `
+    <div style="margin-bottom:.5rem">
+      <div style="margin-bottom:.35rem">Betrag: <strong style="font-size:1.1rem">${fmt(displayAmount)}</strong></div>
+      <div>IBAN: <strong>${esc(data.config.iban)}</strong></div>
+      <div>Empfänger: <strong>${esc(data.config.accountName)}</strong></div>
+      <div>Referenz: <code>${esc(data.reference)}</code></div>
+    </div>
+    ${data.epcQr ? `<div style="margin-top:.75rem"><img src="${data.epcQr}" alt="Zahle QR" style="max-width:160px;border-radius:8px"></div>` : ''}
+  `;
+}
+
+async function toggleSplit(enable, data) {
+  const spinner = document.getElementById('splitSpinner');
+  if (spinner) spinner.style.display = 'inline';
+
+  const url    = `/api/tickets/order/${currentOrder.id}/${enable ? 'enable' : 'disable'}-split`;
+  const res    = await fetch(url, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body:   JSON.stringify({ code }),
+  });
+  const result = await res.json();
+
+  if (!res.ok) {
+    alert(result.error || 'Fehler beim Umschalten.');
+    if (spinner) spinner.style.display = 'none';
+    return;
+  }
+
+  // Lokalen State aktualisieren
+  currentOrder.split_payment = enable ? 1 : 0;
+
+  if (enable && result.splitEpcQrs) {
+    result.splitEpcQrs.forEach(s => {
+      const t = currentTickets.find(t => t.id === s.ticketId);
+      if (t) { t.split_ref = s.ref; t.splitEpcQr = s.qr; }
+    });
+    data.tickets.forEach((t, i) => {
+      const s = result.splitEpcQrs[i];
+      if (s) { t.split_ref = s.ref; t.splitEpcQr = s.qr; }
+    });
+  } else if (!enable) {
+    data.tickets.forEach(t => { t.split_ref = null; t.splitEpcQr = null; });
+  }
+
+  data.order.split_payment = enable ? 1 : 0;
+
+  // Payment-Tab neu rendern
+  const paidAmount   = parseFloat(data.paidAmount   || 0);
+  const remainingEur = parseFloat(data.remainingEur || 0);
+  const totalEur     = parseFloat(data.order.total_eur);
+  const displayAmount = data.order.paid === 2 ? remainingEur : totalEur;
+
+  const detailsEl = document.getElementById('paymentDetails');
+  if (detailsEl) detailsEl.innerHTML = renderPaymentDetails(data, displayAmount);
+
+  if (spinner) spinner.style.display = 'none';
+}
+
+// ── Tab: QR-Codes ─────────────────────────────────────────────────────────
+function renderTabQrCodes(data) {
+  const tab = document.getElementById('tab-tickets');
+  if (!data.tickets || !data.tickets.length) {
+    tab.innerHTML = '<p style="color:#888">Keine Tickets gefunden.</p>';
+    return;
+  }
+
+  const fullyPaid = data.order.paid === 1;
+
+  let html = '';
+  if (!fullyPaid) {
+    html += `<div style="background:#fff3cd;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;color:#856404;font-size:.9rem">⚠️ QR-Codes werden erst nach vollständiger Bezahlung per E-Mail zugestellt. Die Codes hier sind nur zur Vorschau.</div>`;
+  }
+
+  data.tickets.forEach((t, i) => {
+    const isPaid = fullyPaid || !!t.ticket_paid;
+    html += `
+      <div class="ticket-qr-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.35rem">
+          <strong>Ticket ${i + 1} – ${esc(t.ticket_name)}</strong>
+          ${isPaid ? '<span class="paid-chip">✓ Bezahlt</span>' : '<span class="pending-chip">Ausstehend</span>'}
+        </div>
+        <div style="margin-top:.35rem;color:#555;font-size:.9rem">📧 ${esc(t.ticket_email || '–')}</div>
+        ${t.split_ref ? `<div style="margin-top:.2rem;font-size:.82rem;color:#777">🔖 ${esc(t.split_ref)}</div>` : ''}
+      </div>
+    `;
+  });
+
+  tab.innerHTML = html;
+}
+
+// ── Tab: Angaben ändern ───────────────────────────────────────────────────
+function renderTabEdit(data) {
+  const tab    = document.getElementById('tab-edit');
   const canAdd = !data.order.paid && data.remainingSlots > 0;
 
-  editSection.innerHTML = `
-    <div class="card" style="margin-top:1rem">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">
-        <h3 style="margin:0">Deine Tickets ${paidBadge}</h3>
-        <div style="display:flex;gap:.5rem;flex-wrap:wrap">
-          ${canAdd ? `<button id="addTicketBtn" class="btn btn-secondary" style="min-width:140px">➕ Ticket hinzufügen</button>` : ''}
-          <button id="toggleEditBtn" class="btn btn-primary" style="min-width:160px">✏️ Angaben ändern</button>
-        </div>
+  tab.innerHTML = `
+    <div id="manageAlertBox" style="margin-bottom:.75rem"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem">
+      <h3 style="margin:0">Ticket-Angaben</h3>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        ${canAdd ? `<button id="addTicketBtn" class="btn btn-secondary" style="min-width:140px">➕ Ticket hinzufügen</button>` : ''}
+        <button id="toggleEditBtn" class="btn btn-primary" style="min-width:160px">✏️ Angaben ändern</button>
       </div>
-      <div id="manageAlertBox" style="margin-top:.75rem"></div>
-      <div id="ticketList" style="margin-top:1rem"></div>
-      ${canAdd ? `
-        <div id="addTicketForm" style="display:none;margin-top:1rem;padding:1rem;background:#f0f7ff;border-radius:8px">
-          <strong>Neues Ticket hinzufügen</strong>
-          <div class="form-group" style="margin-top:.5rem">
-            <label>Name</label>
-            <input id="addTicketName" type="text" placeholder="Vollständiger Name" autocomplete="name">
-          </div>
-          <div class="form-group">
-            <label>E-Mail</label>
-            <input id="addTicketEmail" type="email" placeholder="name@beispiel.de" autocomplete="email">
-          </div>
-          <div style="display:flex;gap:.5rem;margin-top:.5rem">
-            <button id="addTicketSaveBtn" class="btn btn-primary">✓ Hinzufügen</button>
-            <button id="addTicketCancelBtn" class="btn btn-secondary">Abbrechen</button>
-          </div>
-          <div id="addTicketFeedback" style="margin-top:.5rem"></div>
-        </div>
-      ` : ''}
     </div>
+    ${canAdd ? `
+      <div id="addTicketForm" style="display:none;margin-bottom:1rem;padding:1rem;background:#f0f7ff;border-radius:8px">
+        <strong>Neues Ticket hinzufügen</strong>
+        <div class="form-group" style="margin-top:.5rem">
+          <label>Name</label>
+          <input id="addTicketName" type="text" placeholder="Vollständiger Name" autocomplete="name">
+        </div>
+        <div class="form-group">
+          <label>E-Mail</label>
+          <input id="addTicketEmail" type="email" placeholder="name@beispiel.de" autocomplete="email">
+        </div>
+        <div style="display:flex;gap:.5rem;margin-top:.5rem">
+          <button id="addTicketSaveBtn" class="btn btn-primary">✓ Hinzufügen</button>
+          <button id="addTicketCancelBtn" class="btn btn-secondary">Abbrechen</button>
+        </div>
+        <div id="addTicketFeedback" style="margin-top:.5rem"></div>
+      </div>
+    ` : ''}
+    <div id="ticketList"></div>
   `;
 
   renderTicketList(currentTickets, false);
@@ -261,29 +413,6 @@ async function addTicket() {
     currentTickets.push(data.ticket);
     currentOrder.total_eur = data.newTotalEur;
 
-    // Gesamtpreis aktualisieren
-    const payAmountEl = document.getElementById('payAmount');
-    if (payAmountEl) payAmountEl.textContent = fmt(data.newTotalEur);
-
-    // Split-QR aktualisieren falls vorhanden
-    if (data.splitRef && data.splitEpcQr) {
-      const splitBlock = document.getElementById('splitBlock');
-      if (splitBlock) {
-        const t = data.ticket;
-        splitBlock.innerHTML += `
-          <div class="card" style="background:#f9f9f9;box-shadow:none;padding:1rem;margin-bottom:.5rem">
-            <strong>Ticket ${currentTickets.length} – ${esc(t.ticket_name)}</strong>
-            <div style="margin-top:.5rem;font-size:.9rem">
-              <div>Betrag: <strong>${fmt(config.price)}</strong></div>
-              <div>Referenz: <code>${esc(data.splitRef)}</code></div>
-            </div>
-            <img src="${data.splitEpcQr}" alt="QR" style="margin-top:.5rem;max-width:160px">
-          </div>
-        `;
-      }
-    }
-
-    // Form zurücksetzen
     nameInput.value  = '';
     emailInput.value = '';
     document.getElementById('addTicketForm').style.display = 'none';
@@ -309,8 +438,7 @@ function renderTicketList(tickets, editMode) {
 
   tickets.forEach((ticket, i) => {
     const div = document.createElement('div');
-    div.className = 'card';
-    div.style.cssText = 'background:#f9f9f9;box-shadow:none;padding:1rem;margin-bottom:.75rem';
+    div.style.cssText = 'background:#f9f9f9;border-radius:10px;padding:1rem;margin-bottom:.75rem;box-shadow:0 1px 3px rgba(0,0,0,.06)';
     div.dataset.ticketId = ticket.id;
 
     if (editMode) {
@@ -383,9 +511,6 @@ async function confirmDeleteTicket(ticket, index) {
     currentTickets = currentTickets.filter(t => t.id !== ticket.id);
     currentOrder.total_eur = data.newTotalEur;
 
-    const payAmountEl = document.getElementById('payAmount');
-    if (payAmountEl) payAmountEl.textContent = fmt(data.newTotalEur);
-
     renderTicketList(currentTickets, true);
     showAlert(manageAlert, '✓ Ticket erfolgreich gelöscht.', 'success');
 
@@ -440,26 +565,15 @@ async function saveTicket(div, ticket) {
 }
 
 // ── Ticket-Formulare aufbauen (fresh order) ──────────────────────────────────
+// HINWEIS: Split-Payment-Toggle wurde entfernt aus dem Bestellformular.
+// Er befindet sich jetzt im Zahlungs-Tab des Manage-Modes.
 function buildTicketForms(count) {
   ticketForms.innerHTML = '';
 
-  // Hinweistext: optionale Felder
   const hint = document.createElement('p');
   hint.style.cssText = 'color:#666;font-size:.9rem;margin-bottom:.75rem';
   hint.textContent = `Du kannst 1 bis ${count} Ticket(s) bestellen. Felder die du leer lässt werden nicht berechnet.`;
   ticketForms.appendChild(hint);
-
-  // Split-Payment Toggle
-  const splitRow = document.createElement('div');
-  splitRow.style.cssText = 'margin-bottom:1rem;display:flex;align-items:center;gap:.5rem';
-  splitRow.innerHTML = `
-    <input type="checkbox" id="splitPaymentToggle" style="width:18px;height:18px;cursor:pointer">
-    <label for="splitPaymentToggle" style="cursor:pointer;margin:0">
-      💳 <strong>Separat zahlen</strong> – jede Person überweist ihr Ticket einzeln
-      <span style="font-size:.82rem;color:#666">(Referenz bekommt -1, -2, … Suffix)</span>
-    </label>
-  `;
-  ticketForms.appendChild(splitRow);
 
   for (let i = 1; i <= count; i++) {
     const div = document.createElement('div');
@@ -484,7 +598,6 @@ function buildTicketForms(count) {
     ticketForms.appendChild(div);
   }
 
-  // Dynamischer Gesamtpreis
   const allNameInputs = ticketForms.querySelectorAll('[name=ticketName]');
   allNameInputs.forEach(inp => inp.addEventListener('input', updateTotal));
   updateTotal();
@@ -492,7 +605,6 @@ function buildTicketForms(count) {
 
 function updateTotal() {
   if (!config) return;
-  // Zähle Tickets mit ausgefülltem Namen
   const forms      = ticketForms.querySelectorAll('.card');
   let filledCount  = 0;
   forms.forEach(f => {
@@ -509,7 +621,6 @@ submitBtn.addEventListener('click', async () => {
   const tickets = [];
   const forms   = ticketForms.querySelectorAll('.card');
   const emailRe = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-  const splitPayment = document.getElementById('splitPaymentToggle')?.checked || false;
 
   for (const form of forms) {
     const nameInput  = form.querySelector('[name=ticketName]');
@@ -518,7 +629,6 @@ submitBtn.addEventListener('click', async () => {
     const name  = nameInput.value.trim();
     const email = emailInput.value.trim();
 
-    // Leere Felder überspringen (optionale Tickets)
     if (!name && !email) continue;
 
     if (!name)  { showAlert(alertBox, 'Bitte den Namen für jedes begonnene Ticket ausfüllen.'); nameInput.focus(); return; }
@@ -539,7 +649,7 @@ submitBtn.addEventListener('click', async () => {
   try {
     const res  = await fetch('/api/tickets/order', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ personId: person.id, tickets, splitPayment }),
+      body: JSON.stringify({ personId: person.id, tickets }),
     });
     const data = await res.json();
 
@@ -553,47 +663,31 @@ submitBtn.addEventListener('click', async () => {
     }
     if (!res.ok) { showAlert(alertBox, data.error || 'Fehler beim Absenden.'); return; }
 
+    // Nach erfolgreichem Submit → direkt in Manage-Mode
+    currentOrder   = { id: data.orderId, total_eur: data.totalEur, paid: 0, split_payment: 0 };
+    currentTickets = tickets.map(t => ({ id: null, ticket_name: t.ticketName, ticket_email: t.ticketEmail }));
+
     orderCard.style.display   = 'none';
     paymentCard.style.display = 'block';
 
-    document.getElementById('payAmount').textContent = fmt(data.totalEur);
-    document.getElementById('payIban').textContent   = config.iban;
-    document.getElementById('payName').textContent   = config.accountName;
-    document.getElementById('payRef').textContent    = data.reference;
-
-    // Haupt-EPC-QR
-    const epcBlock = document.getElementById('epcBlock');
-    if (epcBlock) epcBlock.style.display = data.splitPayment ? 'none' : '';
-    if (data.epcQr && !data.splitPayment) {
-      const img = document.getElementById('epcQrImg');
-      if (img) { img.src = data.epcQr; img.style.display = 'block'; }
+    // Manage-Mode mit frischen Daten vom Server laden
+    const freshRes  = await fetch(`/api/tickets/my-order?code=${encodeURIComponent(code)}`);
+    const freshData = await freshRes.json();
+    if (freshRes.ok) {
+      currentOrder   = freshData.order;
+      currentTickets = freshData.tickets;
+      renderManageTabs(freshData);
+    } else {
+      // Fallback: Zahlungsinfo manuell anzeigen
+      paymentCard.innerHTML = `
+        <h3>Zahlungsanweisung</h3>
+        <div>Betrag: <strong>${fmt(data.totalEur)}</strong></div>
+        <div>IBAN: <strong>${esc(config.iban)}</strong></div>
+        <div>Empfänger: <strong>${esc(config.accountName)}</strong></div>
+        <div>Referenz: <code>${esc(data.reference)}</code></div>
+        ${data.epcQr ? `<img src="${data.epcQr}" style="max-width:160px;margin-top:.75rem">` : ''}
+      `;
     }
-
-    // Split-Infos anzeigen
-    if (data.splitPayment && data.splitEpcQrs && data.splitEpcQrs.length) {
-      let splitBlock = document.getElementById('splitBlock');
-      if (!splitBlock) {
-        splitBlock = document.createElement('div');
-        splitBlock.id = 'splitBlock';
-        paymentCard.appendChild(splitBlock);
-      }
-      splitBlock.innerHTML = `<p style="margin-top:1rem"><strong>💳 Separat zahlen – jede Person zahlt ihr eigenes Ticket:</strong></p>`;
-      data.splitEpcQrs.forEach((s, i) => {
-        splitBlock.innerHTML += `
-          <div class="card" style="background:#f9f9f9;box-shadow:none;padding:1rem;margin-bottom:.5rem">
-            <strong>Ticket ${i + 1} – ${esc(tickets[i].ticketName)}</strong>
-            <div style="margin-top:.5rem;font-size:.9rem">
-              <div>Betrag: <strong>${fmt(config.price)}</strong></div>
-              <div>Referenz: <code>${esc(s.ref)}</code></div>
-            </div>
-            ${s.qr ? `<img src="${s.qr}" alt="QR ${i+1}" style="margin-top:.5rem;max-width:160px">` : ''}
-          </div>
-        `;
-      });
-    }
-
-    currentOrder   = { id: data.orderId, total_eur: data.totalEur, paid: 0, split_payment: data.splitPayment ? 1 : 0 };
-    currentTickets = tickets.map(t => ({ id: null, ticket_name: t.ticketName, ticket_email: t.ticketEmail }));
 
   } catch { showAlert(alertBox, 'Verbindungsfehler. Bitte versuche es erneut.'); }
   finally {
