@@ -6,3 +6,8 @@ services:
       - "3000:3000"
     env_file:
       - .env
+    volumes:
+      - abiball_data:/app/data
+
+volumes:
+  abiball_data:
