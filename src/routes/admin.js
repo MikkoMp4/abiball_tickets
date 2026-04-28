@@ -92,7 +92,6 @@ function makeColIdx(header) {
  * lautet dann ABIBALL-XQPM-NTZF. Der Regex muss also Bindestriche im Code erlauben.
  */
 function extractAbiballCode(ref) {
-  // Matches ABIBALL- followed by the code which may contain hyphens (e.g. XQPM-NTZF)
   const m = ref.match(/ABIBALL-([A-Z0-9]{4}-[A-Z0-9]{4}|[A-Z0-9]{4,12})/);
   return m ? m[1] : null;
 }
@@ -190,7 +189,7 @@ router.post('/upload-pdf', pdfUpload.array('pdfs', 20), async (req, res) => {
           affectedPersonIds.add(person.id);
         }
       }
-      allResults.push({ file: file.originalname, reference: ref, amount: tx.amount, personName: person?.name || null });
+      allResults.push({ file: file.originalname, reference: ref, amount: tx.amount, personName: person?.name || null, matched: !!person });
     }
     if (!transactions.length) allResults.push({ file: file.originalname, error: 'Keine Abiball-Referenzen gefunden' });
   }
@@ -214,6 +213,8 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
   if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen' });
 
   const db   = getDb();
+  const s    = getSettings();
+  const ticketPrice = parseFloat(s.ticket_price || '45');
   const ext  = path.extname(req.file.originalname).toLowerCase();
   const rows = [];
 
@@ -305,8 +306,8 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
   const affectedPersonIds = new Set();
 
   for (const row of rows) {
-    const ref   = (row.reference || '').toUpperCase();
-    const code  = extractAbiballCode(ref);
+    const ref    = (row.reference || '').toUpperCase();
+    const code   = extractAbiballCode(ref);
     const person = code ? db.prepare('SELECT * FROM persons WHERE code = ?').get(code) : null;
     const order  = person ? db.prepare('SELECT * FROM orders WHERE person_id = ? AND submitted = 1 ORDER BY id DESC LIMIT 1').get(person.id) : null;
 
@@ -318,7 +319,13 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
         affectedPersonIds.add(person.id);
       }
     }
-    allResults.push({ reference: ref, amount: row.amount_eur, sender: row.sender_name, personName: person?.name || null, matched: !!person });
+    allResults.push({
+      reference:  ref,
+      amount:     row.amount_eur,
+      sender:     row.sender_name,
+      personName: person?.name || null,
+      matched:    !!person,
+    });
   }
 
   const newlyFullyPaid = [];

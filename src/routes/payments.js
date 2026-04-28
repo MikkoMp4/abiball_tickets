@@ -60,11 +60,18 @@ async function sendSingleTicket(db, person, order, ticket) {
 
 /**
  * Berechnet den Zahlungsstatus einer Bestellung neu.
+ * Setzt außerdem ticket_paid auf den order_tickets korrekt.
  *
  * Für Split-Orders: paid=1 nur wenn ALLE Tickets einzeln bezahlt sind.
  * Für Normal-Orders: paid basiert auf Summe aller Payments.
+ *   - Bei Vollzahlung: alle ticket_paid = 1
+ *   - Bei Teilzahlung: ticket_paid = 1 für die ersten N Tickets die durch den Betrag gedeckt sind
+ *   - Bei 0: alle ticket_paid = 0
  */
 function recalcPaymentStatus(db, personId) {
+  const s = getSettings();
+  const ticketPrice = parseFloat(s.ticket_price || '45');
+
   const order = db.prepare(
     'SELECT * FROM orders WHERE person_id = ? AND submitted = 1 ORDER BY id DESC LIMIT 1'
   ).get(personId);
@@ -85,12 +92,18 @@ function recalcPaymentStatus(db, personId) {
       db.prepare(
         "UPDATE orders SET paid = 1, paid_amount = total_eur, paid_at = COALESCE(paid_at, datetime('now')) WHERE id = ?"
       ).run(order.id);
+      db.prepare('UPDATE order_tickets SET ticket_paid = 1 WHERE order_id = ?').run(order.id);
       return { nowFullyPaid: !wasPaid, order: { ...order, paid: 1 } };
     } else if (anyPaid) {
       db.prepare('UPDATE orders SET paid = 2, paid_amount = ? WHERE id = ?').run(paidAmount, order.id);
+      // ticket_paid für einzelne Split-Tickets setzen
+      for (const t of tickets) {
+        db.prepare('UPDATE order_tickets SET ticket_paid = ? WHERE id = ?').run(t.split_paid_at ? 1 : 0, t.id);
+      }
       return { nowFullyPaid: false, order: { ...order, paid: 2 } };
     } else {
       db.prepare('UPDATE orders SET paid = 0, paid_amount = 0 WHERE id = ?').run(order.id);
+      db.prepare('UPDATE order_tickets SET ticket_paid = 0 WHERE order_id = ?').run(order.id);
       return { nowFullyPaid: false, order: { ...order, paid: 0 } };
     }
   }
@@ -101,15 +114,29 @@ function recalcPaymentStatus(db, personId) {
   ).get(personId);
 
   if (total_paid >= order.total_eur - 0.01) {
+    // Vollständig bezahlt: alle Tickets als paid markieren
     db.prepare(
       "UPDATE orders SET paid = 1, paid_amount = ?, paid_at = COALESCE(paid_at, datetime('now')) WHERE id = ?"
     ).run(total_paid, order.id);
+    db.prepare('UPDATE order_tickets SET ticket_paid = 1 WHERE order_id = ?').run(order.id);
     return { nowFullyPaid: !wasPaid, order: { ...order, paid: 1, paid_amount: total_paid } };
   } else if (total_paid > 0) {
+    // Teilzahlung: erste N Tickets als paid markieren die durch den Betrag gedeckt sind
     db.prepare('UPDATE orders SET paid = 2, paid_amount = ? WHERE id = ?').run(total_paid, order.id);
+    const tickets = db.prepare('SELECT * FROM order_tickets WHERE order_id = ? ORDER BY id ASC').all(order.id);
+    let remaining = total_paid;
+    for (const ticket of tickets) {
+      if (remaining >= ticketPrice - 0.01) {
+        db.prepare('UPDATE order_tickets SET ticket_paid = 1 WHERE id = ?').run(ticket.id);
+        remaining -= ticketPrice;
+      } else {
+        db.prepare('UPDATE order_tickets SET ticket_paid = 0 WHERE id = ?').run(ticket.id);
+      }
+    }
     return { nowFullyPaid: false, order: { ...order, paid: 2, paid_amount: total_paid } };
   } else {
     db.prepare('UPDATE orders SET paid = 0, paid_amount = 0 WHERE id = ?').run(order.id);
+    db.prepare('UPDATE order_tickets SET ticket_paid = 0 WHERE order_id = ?').run(order.id);
     return { nowFullyPaid: false, order: { ...order, paid: 0, paid_amount: 0 } };
   }
 }
@@ -141,7 +168,6 @@ router.post('/upload', upload.single('statement'), async (req, res) => {
       for (const person of allPersons) {
         const { isSplit, ticketNum } = parseSplitRef(entry.reference, person.code);
         if (isSplit) {
-          // Prüfe ob auch der Code enthalten ist (damit kein False-Positive)
           if (refUpper.includes(person.code.toUpperCase())) {
             matchedPerson  = person;
             splitTicketNum = ticketNum;
@@ -161,7 +187,6 @@ router.post('/upload', upload.single('statement'), async (req, res) => {
           ).get(order.id, splitTicketNum);
           if (ticket && !ticket.split_paid_at) {
             splitTicketId = ticket.id;
-            // Ticket als bezahlt markieren
             db.prepare(
               "UPDATE order_tickets SET split_paid_at = datetime('now'), split_amount = ? WHERE id = ?"
             ).run(entry.amount, ticket.id);
@@ -190,6 +215,7 @@ router.post('/upload', upload.single('statement'), async (req, res) => {
         senderName: entry.senderName,
         amount:     entry.amount,
         personName: matchedPerson?.name || null,
+        matched:    !!matchedPerson,
         splitTicket: splitTicketNum || null,
       });
     }
@@ -216,7 +242,6 @@ router.post('/upload', upload.single('statement'), async (req, res) => {
 
   // E-Mails für einzelne Split-Tickets die jetzt bezahlt sind (aber Gesamtbestellung noch offen)
   for (const { person, order, ticket } of splitTicketsNowPaid) {
-    // Nur senden wenn Bestellung noch nicht komplett bezahlt (dann hat sendTicketsForOrder schon alle gesendet)
     const wasFullyHandled = newlyFullyPaid.some(e => e.order.id === order.id);
     if (!wasFullyHandled) {
       try {
@@ -248,6 +273,7 @@ router.get('/', (req, res) => {
 });
 
 // POST /api/payments/:id/send
+// Sendet NUR Tickets die ticket_paid=1 haben (bei Teilzahlung nicht alle blind senden)
 router.post('/:id/send', async (req, res) => {
   const db      = getDb();
   const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(req.params.id);
@@ -257,15 +283,32 @@ router.post('/:id/send', async (req, res) => {
   if (!person) return res.status(400).json({ error: 'Person nicht gefunden' });
   const order  = db.prepare('SELECT * FROM orders WHERE person_id = ? ORDER BY id DESC LIMIT 1').get(payment.person_id);
   if (!order)  return res.status(400).json({ error: 'Keine Bestellung gefunden' });
-  const orderTickets = db.prepare('SELECT * FROM order_tickets WHERE order_id = ?').all(order.id);
-  if (!orderTickets.length) return res.status(400).json({ error: 'Keine Tickets in der Bestellung' });
-  if (!orderTickets.some(t => (t.ticket_email || '').trim()))
-    return res.status(400).json({ error: 'Keine E-Mail-Adressen für die Tickets hinterlegt.' });
+
+  // Nur bereits bezahlte Tickets senden
+  const paidTickets = db.prepare('SELECT * FROM order_tickets WHERE order_id = ? AND ticket_paid = 1').all(order.id);
+  if (!paidTickets.length) return res.status(400).json({ error: 'Keine bezahlten Tickets vorhanden. Bitte zuerst Zahlung zuordnen.' });
+  if (!paidTickets.some(t => (t.ticket_email || '').trim()))
+    return res.status(400).json({ error: 'Keine E-Mail-Adressen für die bezahlten Tickets hinterlegt.' });
+
   try {
-    const sentTo = await sendTicketsForOrder(db, person, order);
+    const sentTo = [];
+    for (const ticket of paidTickets) {
+      const toEmail = (ticket.ticket_email || '').trim();
+      if (!toEmail) continue;
+      const qrBuffer = await generateQrBuffer(JSON.stringify({
+        ticketId: ticket.id, orderId: order.id,
+        personCode: person.code, name: ticket.ticket_name,
+      }));
+      await sendTicketEmail({ to: toEmail, personName: ticket.ticket_name || person.name, qrBuffers: [qrBuffer] });
+      sentTo.push(toEmail);
+    }
     db.prepare('UPDATE payments SET qr_sent = 1 WHERE id = ?').run(payment.id);
-    db.prepare("UPDATE orders SET paid = 1, paid_amount = total_eur, paid_at = COALESCE(paid_at, datetime('now')) WHERE id = ?").run(order.id);
-    res.json({ ok: true, sentTo });
+    // Order als vollständig bezahlt markieren nur wenn ALLE Tickets paid sind
+    const allTickets = db.prepare('SELECT COUNT(*) AS n FROM order_tickets WHERE order_id = ?').get(order.id);
+    if (paidTickets.length >= allTickets.n) {
+      db.prepare("UPDATE orders SET paid = 1, paid_amount = total_eur, paid_at = COALESCE(paid_at, datetime('now')) WHERE id = ?").run(order.id);
+    }
+    res.json({ ok: true, sentTo, paidTickets: paidTickets.length, totalTickets: allTickets.n });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
