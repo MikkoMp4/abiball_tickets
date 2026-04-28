@@ -379,7 +379,6 @@ let allPersonsForPayments = [];
 
 async function loadPayments() {
   try {
-    // Personen für Zuordnungs-Dropdown laden
     const pRes = await fetch('/api/admin/persons');
     if (pRes.ok) {
       const pData = await pRes.json();
@@ -403,7 +402,6 @@ function renderPayments(payments) {
     .join('');
 
   tbody.innerHTML = payments.map(p => {
-    // Zuordnungs-Spalte: Dropdown + Button wenn noch nicht zugeordnet, sonst Name
     let assignCell;
     if (!p.matched || !p.person_id) {
       assignCell = `
@@ -444,7 +442,7 @@ function renderPayments(payments) {
   }).join('');
 }
 
-/** Zahlung einer Person zuordnen (neu oder erstmals) */
+/** Zahlung einer Person zuordnen */
 window.assignPayment = async function(paymentId, btn) {
   const select   = document.getElementById(`assign-select-${paymentId}`);
   const personId = select?.value;
@@ -458,8 +456,18 @@ window.assignPayment = async function(paymentId, btn) {
     });
     const data = await res.json();
     if (res.ok) {
-      const paidMsg = data.nowFullyPaid ? ' 🎉 Bestellung jetzt vollständig bezahlt!' : '';
-      showAlert('paymentsAlert', `✅ Zahlung ${paymentId} zugeordnet zu ${esc(data.personName)}.${paidMsg}`, 'success');
+      // Zeige detaillierte Debug-Info aus der Antwort
+      let msg = `✅ Zahlung ${paymentId} zugeordnet zu ${esc(data.personName)}.`;
+      if (data.nowFullyPaid) {
+        msg += ' 🎉 Bestellung jetzt vollständig bezahlt!';
+      } else if (data.orderPaidStatus === 2) {
+        msg += ` Teilzahlung: ${fmt(data.orderPaidAmount)} von ${fmt(data.orderTotalEur)}.`;
+      } else if (data.orderTotalEur === 0 || data.orderTotalEur === null) {
+        msg += ' ⚠️ Bestellung hat total_eur=0 – Betrag wurde nicht automatisch gesetzt. Bitte manuell als bezahlt markieren.';
+      } else {
+        msg += ` Bestellstatus: ${data.orderPaidStatus} (${fmt(data.orderPaidAmount)} von ${fmt(data.orderTotalEur)}).`;
+      }
+      showAlert('paymentsAlert', msg, data.nowFullyPaid ? 'success' : 'warning');
       loadPayments(); loadOrders(); loadStats(); loadDashUnpaid();
     } else {
       showAlert('paymentsAlert', data.error || 'Fehler beim Zuordnen.');
@@ -471,9 +479,8 @@ window.assignPayment = async function(paymentId, btn) {
   }
 };
 
-/** Zuordnung ändern – zeigt das Dropdown wieder an */
+/** Zuordnung ändern */
 window.reassignPayment = async function(paymentId, btn) {
-  // Zeile neu rendern mit Dropdown
   const personOptions = allPersonsForPayments
     .map(p => `<option value="${p.id}">${esc(p.name)} (${esc(p.code)})</option>`)
     .join('');
@@ -538,13 +545,29 @@ function setupCsvUpload() {
       const res  = await fetch('/api/admin/upload-statement', { method: 'POST', body: form });
       const data = await res.json();
       if (res.ok) {
-        // Backend gibt data.processed zurück (nicht data.inserted)
-        const inserted = data.inserted ?? data.processed ?? 0;
-        const matched  = data.matched ?? 0;
-        let msg = `✅ ${inserted} neue Zahlung(en), ${matched} zugeordnet.`;
-        if (data.splitPaid > 0) msg += ` ${data.splitPaid} Einzel-Ticket(s) als bezahlt markiert.`;
+        const processed = data.processed ?? 0;
+        const matched   = data.matched ?? 0;
+        let msg = `✅ ${processed} Zeilen verarbeitet, ${matched} zugeordnet.`;
         if (data.newlyPaid > 0) msg += ` 🎉 ${data.newlyPaid} Bestellung(en) jetzt vollständig bezahlt.`;
-        showAlert('csvUploadAlert', msg, 'success');
+        // Detail-Tabelle der Ergebnisse
+        let detail = '';
+        if (data.results?.length) {
+          const rows = data.results.slice(0, 20).map(r =>
+            `<tr>
+              <td style="font-size:.75rem;max-width:160px;overflow:hidden;text-overflow:ellipsis">${esc(r.reference)}</td>
+              <td style="font-size:.75rem">${fmt(r.amount)}</td>
+              <td style="font-size:.75rem">${r.personName ? esc(r.personName) : '<span style="color:var(--muted)">–</span>'}</td>
+              <td style="font-size:.75rem">${r.orderId ? `#${r.orderId} (${fmt(r.orderTotalEur)})` : '<span style="color:var(--muted)">–</span>'}</td>
+              <td>${r.matched ? '✅' : '❌'}</td>
+            </tr>`
+          ).join('');
+          detail = `<details style="margin-top:.5rem"><summary style="cursor:pointer;font-size:.83rem">Details (${data.results.length} Zeilen)</summary>
+            <table style="width:100%;font-size:.8rem;margin-top:.3rem">
+              <thead><tr><th>Referenz</th><th>Betrag</th><th>Person</th><th>Bestellung</th><th>Match</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table></details>`;
+        }
+        showAlert('csvUploadAlert', msg + detail, 'success');
         loadPayments(); loadStats(); loadOrders(); loadDashUnpaid();
       } else { showAlert('csvUploadAlert', data.error || 'Fehler beim Verarbeiten.'); }
     } catch { showAlert('csvUploadAlert', 'Verbindungsfehler.'); }

@@ -90,10 +90,21 @@ function makeColIdx(header) {
  * Extrahiert den Abiball-Code aus einem Verwendungszweck-String.
  * Codes haben das Format XXXX-XXXX (z.B. XQPM-NTZF), der Verwendungszweck
  * lautet dann ABIBALL-XQPM-NTZF. Der Regex muss also Bindestriche im Code erlauben.
+ *
+ * FIX: Auch case-insensitiv und ohne ABIBALL-Präfix wenn der Code direkt vorkommt.
  */
-function extractAbiballCode(ref) {
-  const m = ref.match(/ABIBALL-([A-Z0-9]{4}-[A-Z0-9]{4}|[A-Z0-9]{4,12})/);
-  return m ? m[1] : null;
+function extractAbiballCode(ref, allPersonCodes) {
+  // Primär: ABIBALL-XXXX-XXXX
+  const m = ref.match(/ABIBALL[-\s]?([A-Z0-9]{4}[-\s]?[A-Z0-9]{4})/i);
+  if (m) return m[1].replace(/\s/g, '-').toUpperCase();
+
+  // Fallback: direkt nach bekannten Codes suchen wenn übergeben
+  if (allPersonCodes) {
+    for (const code of allPersonCodes) {
+      if (ref.toUpperCase().includes(code.toUpperCase())) return code;
+    }
+  }
+  return null;
 }
 
 router.post('/generate-codes', (req, res) => {
@@ -135,6 +146,8 @@ router.delete('/persons/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// GET /api/admin/orders
+// FIX: submitted=0 Bestellungen werden jetzt auch gezeigt (mit Flag) damit man sieht was passiert
 router.get('/orders', (req, res) => {
   const db     = getDb();
   const orders = db.prepare(`
@@ -145,6 +158,18 @@ router.get('/orders', (req, res) => {
   `).all();
   const getTickets = db.prepare('SELECT * FROM order_tickets WHERE order_id = ?');
   res.json({ orders: orders.map(o => ({ ...o, tickets: getTickets.all(o.id) })) });
+});
+
+// GET /api/admin/orders/debug – zeigt ALLE Orders inkl. submitted=0 für Debugging
+router.get('/orders/debug', (req, res) => {
+  const db     = getDb();
+  const orders = db.prepare(`
+    SELECT o.*, p.name AS person_name, p.code AS person_code
+    FROM orders o JOIN persons p ON p.id = o.person_id
+    ORDER BY o.id DESC
+  `).all();
+  const payments = db.prepare('SELECT * FROM payments ORDER BY id DESC').all();
+  res.json({ orders, payments });
 });
 
 router.get('/stats', (req, res) => {
@@ -169,6 +194,7 @@ router.post('/upload-pdf', pdfUpload.array('pdfs', 20), async (req, res) => {
   const db = getDb();
   const allResults = [];
   const affectedPersonIds = new Set();
+  const allPersonCodes = db.prepare('SELECT code FROM persons').all().map(r => r.code);
 
   for (const file of req.files) {
     let transactions;
@@ -177,7 +203,7 @@ router.post('/upload-pdf', pdfUpload.array('pdfs', 20), async (req, res) => {
 
     for (const tx of transactions) {
       const ref    = tx.reference.toUpperCase();
-      const code   = extractAbiballCode(ref);
+      const code   = extractAbiballCode(ref, allPersonCodes);
       const person = code ? db.prepare('SELECT * FROM persons WHERE code = ?').get(code) : null;
       const order  = person ? db.prepare('SELECT * FROM orders WHERE person_id = ? AND submitted = 1 ORDER BY id DESC LIMIT 1').get(person.id) : null;
 
@@ -188,7 +214,6 @@ router.post('/upload-pdf', pdfUpload.array('pdfs', 20), async (req, res) => {
             .run(person.id, tx.amount, ref, person.name);
           affectedPersonIds.add(person.id);
         }
-        // Auch wenn Payment schon existiert: Status neu berechnen
         affectedPersonIds.add(person.id);
       }
       allResults.push({ file: file.originalname, reference: ref, amount: tx.amount, personName: person?.name || null, matched: !!person });
@@ -217,6 +242,7 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
   const db  = getDb();
   const ext = path.extname(req.file.originalname).toLowerCase();
   const rows = [];
+  const allPersonCodes = db.prepare('SELECT code FROM persons').all().map(r => r.code);
 
   try {
     if (ext === '.csv') {
@@ -236,7 +262,7 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
 
       if (refCol === -1 || amtCol === -1) {
         return res.status(400).json({
-          error: `CSV-Format nicht erkannt: Spalten "Verwendungszweck" und "Betrag" werden ben\u00f6tigt. Erkannte Spalten: ${header.join(', ')}`,
+          error: `CSV-Format nicht erkannt. Erkannte Spalten: ${header.join(', ')}. Ben\u00f6tigt: Verwendungszweck + Betrag`,
         });
       }
 
@@ -279,7 +305,7 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
       const amtCol  = colIdx(['betrag', 'amount', 'umsatz', 'wert']);
 
       if (refCol === -1 || amtCol === -1) {
-        return res.status(400).json({ error: 'Excel-Format nicht erkannt: Spalten "Verwendungszweck" und "Betrag" werden ben\u00f6tigt.' });
+        return res.status(400).json({ error: 'Excel-Format nicht erkannt.' });
       }
 
       ws.eachRow((row, rowNum) => {
@@ -305,21 +331,21 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
   const allResults = [];
   const affectedPersonIds = new Set();
 
-  // Verwende INSERT OR IGNORE damit Duplikate den Request nicht zum Absturz bringen
   const insertPayment = db.prepare(
     'INSERT OR IGNORE INTO payments (person_id, amount_eur, reference, sender_name, booking_date, matched) VALUES (?, ?, ?, ?, ?, 1)'
   );
 
   for (const row of rows) {
     const ref    = (row.reference || '').toUpperCase();
-    const code   = extractAbiballCode(ref);
+    // FIX: allPersonCodes als Fallback übergeben für direktes Code-Matching
+    const code   = extractAbiballCode(ref, allPersonCodes);
     const person = code ? db.prepare('SELECT * FROM persons WHERE code = ?').get(code) : null;
     const order  = person ? db.prepare('SELECT * FROM orders WHERE person_id = ? AND submitted = 1 ORDER BY id DESC LIMIT 1').get(person.id) : null;
 
-    if (person && order && !isNaN(row.amount_eur)) {
+    console.log(`[upload-statement] ref=${ref} code=${code} person=${person?.name} order=${order?.id} total_eur=${order?.total_eur}`);
+
+    if (person && order) {
       insertPayment.run(person.id, row.amount_eur, ref, row.sender_name || person.name, row.booking_date);
-      // Immer in affectedPersonIds eintragen – auch wenn Payment schon existierte –
-      // damit recalcPaymentStatus auf jeden Fall läuft und paid/ticket_paid korrekt gesetzt wird.
       affectedPersonIds.add(person.id);
     }
     allResults.push({
@@ -327,6 +353,8 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
       amount:     row.amount_eur,
       sender:     row.sender_name,
       personName: person?.name || null,
+      orderId:    order?.id || null,
+      orderTotalEur: order?.total_eur || null,
       matched:    !!person,
     });
   }

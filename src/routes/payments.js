@@ -5,12 +5,6 @@
  *   0 = unbezahlt
  *   1 = vollstaendig bezahlt
  *   2 = teilweise bezahlt
- *
- * Split-Payment:
- *   Wenn orders.split_payment = 1, bekommt jedes Ticket eine eigene Referenz (CODE-1, CODE-2, …).
- *   Die Zuordnung erfolgt über order_tickets.split_ref.
- *   Beim CSV-Upload wird geprüft ob die Referenz CODE-N matcht und das entsprechende Ticket
- *   als bezahlt markiert. Die Gesamt-Order gilt als paid=1 wenn ALLE Tickets bezahlt sind.
  */
 const express = require('express');
 const router  = express.Router();
@@ -60,13 +54,8 @@ async function sendSingleTicket(db, person, order, ticket) {
 
 /**
  * Berechnet den Zahlungsstatus einer Bestellung neu.
- * Setzt außerdem ticket_paid auf den order_tickets korrekt.
  *
- * Für Split-Orders: paid=1 nur wenn ALLE Tickets einzeln bezahlt sind.
- * Für Normal-Orders: paid basiert auf Summe aller Payments.
- *   - Bei Vollzahlung: alle ticket_paid = 1
- *   - Bei Teilzahlung: ticket_paid = 1 für die ersten N Tickets die durch den Betrag gedeckt sind
- *   - Bei 0: alle ticket_paid = 0
+ * FIX: Wenn total_eur = 0 (kaputte Testdaten), wird NICHT auf paid=1 gesetzt.
  */
 function recalcPaymentStatus(db, personId) {
   const s = getSettings();
@@ -76,6 +65,13 @@ function recalcPaymentStatus(db, personId) {
     'SELECT * FROM orders WHERE person_id = ? AND submitted = 1 ORDER BY id DESC LIMIT 1'
   ).get(personId);
   if (!order) return { nowFullyPaid: false, order: null };
+
+  // Sicherheitscheck: total_eur muss > 0 sein sonst kein Auto-paid
+  const totalEur = parseFloat(order.total_eur) || 0;
+  if (totalEur <= 0) {
+    console.warn(`[recalc] Bestellung #${order.id} hat total_eur=${totalEur} – überspringe Status-Update`);
+    return { nowFullyPaid: false, order };
+  }
 
   const wasPaid = order.paid === 1;
 
@@ -112,7 +108,9 @@ function recalcPaymentStatus(db, personId) {
     'SELECT COALESCE(SUM(amount_eur), 0) AS total_paid FROM payments WHERE person_id = ? AND amount_eur > 0'
   ).get(personId);
 
-  if (total_paid >= order.total_eur - 0.01) {
+  console.log(`[recalc] Person #${personId} Order #${order.id}: total_paid=${total_paid} total_eur=${totalEur}`);
+
+  if (total_paid >= totalEur - 0.01) {
     db.prepare(
       "UPDATE orders SET paid = 1, paid_amount = ?, paid_at = COALESCE(paid_at, datetime('now')) WHERE id = ?"
     ).run(total_paid, order.id);
@@ -266,7 +264,6 @@ router.get('/', (req, res) => {
 /**
  * PATCH /api/payments/:id
  * Ordnet eine Zahlung manuell einer Person zu und berechnet den Bestellstatus neu.
- * Body: { personId: number }
  */
 router.patch('/:id', (req, res) => {
   const db      = getDb();
@@ -279,24 +276,28 @@ router.patch('/:id', (req, res) => {
   const person = db.prepare('SELECT * FROM persons WHERE id = ?').get(personId);
   if (!person) return res.status(404).json({ error: 'Person nicht gefunden' });
 
-  // Alten person_id merken für Rückberechnung
   const oldPersonId = payment.person_id;
 
   db.prepare('UPDATE payments SET person_id = ?, matched = 1 WHERE id = ?').run(personId, payment.id);
 
-  // Status für neue Person neu berechnen
   const { nowFullyPaid, order } = recalcPaymentStatus(db, personId);
 
-  // Falls Payment vorher einer anderen Person zugeordnet war, auch deren Status neu berechnen
   if (oldPersonId && oldPersonId !== personId) {
     recalcPaymentStatus(db, oldPersonId);
   }
 
+  // Debug-Info mit zurückgeben damit man im Frontend sieht was passiert
+  const freshOrder = db.prepare(
+    'SELECT * FROM orders WHERE person_id = ? AND submitted = 1 ORDER BY id DESC LIMIT 1'
+  ).get(personId);
+
   res.json({
     ok: true,
-    personName:    person.name,
+    personName:      person.name,
     nowFullyPaid,
-    orderPaidStatus: order ? order.paid : null,
+    orderPaidStatus: freshOrder ? freshOrder.paid : null,
+    orderTotalEur:   freshOrder ? freshOrder.total_eur : null,
+    orderPaidAmount: freshOrder ? freshOrder.paid_amount : null,
   });
 });
 
