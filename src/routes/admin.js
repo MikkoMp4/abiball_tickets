@@ -88,17 +88,10 @@ function makeColIdx(header) {
 
 /**
  * Extrahiert den Abiball-Code aus einem Verwendungszweck-String.
- * Codes haben das Format XXXX-XXXX (z.B. XQPM-NTZF), der Verwendungszweck
- * lautet dann ABIBALL-XQPM-NTZF. Der Regex muss also Bindestriche im Code erlauben.
- *
- * FIX: Auch case-insensitiv und ohne ABIBALL-Präfix wenn der Code direkt vorkommt.
  */
 function extractAbiballCode(ref, allPersonCodes) {
-  // Primär: ABIBALL-XXXX-XXXX
   const m = ref.match(/ABIBALL[-\s]?([A-Z0-9]{4}[-\s]?[A-Z0-9]{4})/i);
   if (m) return m[1].replace(/\s/g, '-').toUpperCase();
-
-  // Fallback: direkt nach bekannten Codes suchen wenn übergeben
   if (allPersonCodes) {
     for (const code of allPersonCodes) {
       if (ref.toUpperCase().includes(code.toUpperCase())) return code;
@@ -146,8 +139,6 @@ router.delete('/persons/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// GET /api/admin/orders
-// FIX: submitted=0 Bestellungen werden jetzt auch gezeigt (mit Flag) damit man sieht was passiert
 router.get('/orders', (req, res) => {
   const db     = getDb();
   const orders = db.prepare(`
@@ -160,7 +151,6 @@ router.get('/orders', (req, res) => {
   res.json({ orders: orders.map(o => ({ ...o, tickets: getTickets.all(o.id) })) });
 });
 
-// GET /api/admin/orders/debug – zeigt ALLE Orders inkl. submitted=0 für Debugging
 router.get('/orders/debug', (req, res) => {
   const db     = getDb();
   const orders = db.prepare(`
@@ -337,18 +327,14 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
 
   for (const row of rows) {
     const ref    = (row.reference || '').toUpperCase();
-    // FIX: allPersonCodes als Fallback übergeben für direktes Code-Matching
     const code   = extractAbiballCode(ref, allPersonCodes);
     const person = code ? db.prepare('SELECT * FROM persons WHERE code = ?').get(code) : null;
     const order  = person ? db.prepare('SELECT * FROM orders WHERE person_id = ? AND submitted = 1 ORDER BY id DESC LIMIT 1').get(person.id) : null;
-
-    console.log(`[upload-statement] ref=${ref} code=${code} person=${person?.name} order=${order?.id} total_eur=${order?.total_eur}`);
 
     if (person && order) {
       insertPayment.run(person.id, row.amount_eur, ref, row.sender_name || person.name, row.booking_date);
       affectedPersonIds.add(person.id);
 
-      // Split-Payment: Referenz endet auf -N → entsprechendes Ticket als bezahlt markieren
       if (order.split_payment) {
         const splitMatch = ref.match(/-(\d+)$/);
         if (splitMatch) {
@@ -362,7 +348,6 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
             ).run(row.amount_eur, ticket.id);
           }
         } else {
-          // Keine Nummer am Ende → Gesamtzahlung, alle noch offenen Tickets bezahlen
           const s = getSettings();
           const ticketPrice = parseFloat(s.ticket_price || '45');
           let remaining = row.amount_eur;
@@ -379,14 +364,16 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
           }
         }
       }
+    }
+
     allResults.push({
-      reference:  ref,
-      amount:     row.amount_eur,
-      sender:     row.sender_name,
-      personName: person?.name || null,
-      orderId:    order?.id || null,
+      reference:     ref,
+      amount:        row.amount_eur,
+      sender:        row.sender_name,
+      personName:    person?.name || null,
+      orderId:       order?.id || null,
       orderTotalEur: order?.total_eur || null,
-      matched:    !!person,
+      matched:       !!person,
     });
   }
 
@@ -403,11 +390,11 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
   }
 
   res.json({
-    processed:   allResults.length,
-    matched:     allResults.filter(r => r.matched).length,
-    newlyPaid:   newlyFullyPaid.length,
-    emailsSent:  emailResults,
-    results:     allResults,
+    processed:  allResults.length,
+    matched:    allResults.filter(r => r.matched).length,
+    newlyPaid:  newlyFullyPaid.length,
+    emailsSent: emailResults,
+    results:    allResults,
   });
 });
 
