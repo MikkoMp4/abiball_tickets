@@ -445,6 +445,6 @@ router.get('/order/:personId', async (req, res) => {
   if (order.epc_blob) epcQr = await generateQrDataUrl(order.epc_blob);
   res.json({ order, tickets, epcQr });
 });
-
-module.exports = router;
 */
+module.exports = router;
+
