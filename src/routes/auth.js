@@ -26,7 +26,7 @@ const COOKIE_OPTS = {
   httpOnly: true,
   sameSite: 'lax',
   maxAge:   60 * 24 * 60 * 60 * 1000, // 60 days in ms
-  // secure: true  ← uncomment when serving over HTTPS
+  secure: process.env.NODE_ENV === 'production',
 };
 
 // ── POST /api/auth/login ─────────────────────────────────────────────────────
