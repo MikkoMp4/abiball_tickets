@@ -375,8 +375,16 @@ window.adminDeleteTicket = async function(orderId, ticketId, btn) {
 };
 
 // ── Payments ────────────────────────────────────────────────────────────────
+let allPersonsForPayments = [];
+
 async function loadPayments() {
   try {
+    // Personen für Zuordnungs-Dropdown laden
+    const pRes = await fetch('/api/admin/persons');
+    if (pRes.ok) {
+      const pData = await pRes.json();
+      allPersonsForPayments = pData.persons || [];
+    }
     const res  = await fetch('/api/payments');
     const data = await res.json();
     renderPayments(data.payments || []);
@@ -386,20 +394,102 @@ async function loadPayments() {
 function renderPayments(payments) {
   const tbody = document.getElementById('paymentsTbody');
   if (!payments.length) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted)">Keine Zahlungen vorhanden.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted)">Keine Zahlungen vorhanden.</td></tr>';
     return;
   }
-  tbody.innerHTML = payments.map(p => `<tr>
-    <td><span class="badge badge-muted" title="Zahlungs-ID">#${p.id}</span></td>
-    <td style="font-size:.82rem">${esc(p.booking_date||'–')}</td>
-    <td>${esc(p.sender_name||'–')}</td>
-    <td style="font-size:.82rem;max-width:180px;overflow:hidden;text-overflow:ellipsis">${esc(p.reference||'–')}</td>
-    <td>${fmt(p.amount_eur)}</td>
-    <td>${p.person_name ? `<strong>${esc(p.person_name)}</strong>` : '<span style="color:var(--muted)">nicht zugeordnet</span>'}</td>
-    <td>${p.matched ? (p.qr_sent ? '<span class="badge badge-success">QR gesendet</span>' : '<span class="badge badge-warning">Zahlung ok</span>') : '<span class="badge badge-muted">offen</span>'}</td>
-    <td>${p.matched && !p.qr_sent ? `<button class="btn btn-success" style="padding:.3rem .7rem;font-size:.8rem" onclick="sendTickets(${p.id},this)">✉ Tickets senden</button>` : ''}</td>
-  </tr>`).join('');
+
+  const personOptions = allPersonsForPayments
+    .map(p => `<option value="${p.id}">${esc(p.name)} (${esc(p.code)})</option>`)
+    .join('');
+
+  tbody.innerHTML = payments.map(p => {
+    // Zuordnungs-Spalte: Dropdown + Button wenn noch nicht zugeordnet, sonst Name
+    let assignCell;
+    if (!p.matched || !p.person_id) {
+      assignCell = `
+        <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap">
+          <select id="assign-select-${p.id}" style="font-size:.8rem;padding:.2rem .4rem;border:1px solid var(--border);border-radius:4px;max-width:160px">
+            <option value="">– Person –</option>
+            ${personOptions}
+          </select>
+          <button class="btn btn-primary" style="padding:.25rem .6rem;font-size:.78rem;white-space:nowrap"
+            onclick="assignPayment(${p.id},this)">Zuordnen</button>
+        </div>`;
+    } else {
+      assignCell = `<strong>${esc(p.person_name)}</strong>
+        <button class="btn" style="padding:.15rem .45rem;font-size:.72rem;margin-left:.4rem;background:none;border:1px solid var(--border);color:var(--muted)"
+          onclick="reassignPayment(${p.id},this)" title="Zuordnung ändern">✏️</button>`;
+    }
+
+    const statusBadge = p.matched
+      ? (p.qr_sent
+          ? '<span class="badge badge-success">QR gesendet</span>'
+          : '<span class="badge badge-warning">Zahlung ok</span>')
+      : '<span class="badge badge-muted">offen</span>';
+
+    const sendBtn = p.matched && p.person_id && !p.qr_sent
+      ? `<button class="btn btn-success" style="padding:.3rem .7rem;font-size:.8rem" onclick="sendTickets(${p.id},this)">✉ Tickets senden</button>`
+      : '';
+
+    return `<tr>
+      <td><span class="badge badge-muted" title="Zahlungs-ID">#${p.id}</span></td>
+      <td style="font-size:.82rem">${esc(p.booking_date||'–')}</td>
+      <td>${esc(p.sender_name||'–')}</td>
+      <td style="font-size:.82rem;max-width:180px;overflow:hidden;text-overflow:ellipsis">${esc(p.reference||'–')}</td>
+      <td>${fmt(p.amount_eur)}</td>
+      <td>${assignCell}</td>
+      <td>${statusBadge}</td>
+      <td>${sendBtn}</td>
+    </tr>`;
+  }).join('');
 }
+
+/** Zahlung einer Person zuordnen (neu oder erstmals) */
+window.assignPayment = async function(paymentId, btn) {
+  const select   = document.getElementById(`assign-select-${paymentId}`);
+  const personId = select?.value;
+  if (!personId) { showAlert('paymentsAlert', 'Bitte eine Person auswählen.', 'warning'); return; }
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const res  = await fetch(`/api/payments/${paymentId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ personId: Number(personId) }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      const paidMsg = data.nowFullyPaid ? ' 🎉 Bestellung jetzt vollständig bezahlt!' : '';
+      showAlert('paymentsAlert', `✅ Zahlung ${paymentId} zugeordnet zu ${esc(data.personName)}.${paidMsg}`, 'success');
+      loadPayments(); loadOrders(); loadStats(); loadDashUnpaid();
+    } else {
+      showAlert('paymentsAlert', data.error || 'Fehler beim Zuordnen.');
+      btn.disabled = false; btn.textContent = 'Zuordnen';
+    }
+  } catch {
+    showAlert('paymentsAlert', 'Verbindungsfehler.');
+    btn.disabled = false; btn.textContent = 'Zuordnen';
+  }
+};
+
+/** Zuordnung ändern – zeigt das Dropdown wieder an */
+window.reassignPayment = async function(paymentId, btn) {
+  // Zeile neu rendern mit Dropdown
+  const personOptions = allPersonsForPayments
+    .map(p => `<option value="${p.id}">${esc(p.name)} (${esc(p.code)})</option>`)
+    .join('');
+  const cell = btn.parentElement;
+  cell.innerHTML = `
+    <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap">
+      <select id="assign-select-${paymentId}" style="font-size:.8rem;padding:.2rem .4rem;border:1px solid var(--border);border-radius:4px;max-width:160px">
+        <option value="">– Person –</option>
+        ${personOptions}
+      </select>
+      <button class="btn btn-primary" style="padding:.25rem .6rem;font-size:.78rem;white-space:nowrap"
+        onclick="assignPayment(${paymentId},this)">Speichern</button>
+      <button class="btn" style="padding:.25rem .5rem;font-size:.78rem"
+        onclick="loadPayments()">✕</button>
+    </div>`;
+};
 
 window.sendTickets = async function(paymentId, btn) {
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
@@ -448,8 +538,12 @@ function setupCsvUpload() {
       const res  = await fetch('/api/admin/upload-statement', { method: 'POST', body: form });
       const data = await res.json();
       if (res.ok) {
-        let msg = `✅ ${data.inserted} neue Zahlung(en), ${data.matched} zugeordnet.`;
+        // Backend gibt data.processed zurück (nicht data.inserted)
+        const inserted = data.inserted ?? data.processed ?? 0;
+        const matched  = data.matched ?? 0;
+        let msg = `✅ ${inserted} neue Zahlung(en), ${matched} zugeordnet.`;
         if (data.splitPaid > 0) msg += ` ${data.splitPaid} Einzel-Ticket(s) als bezahlt markiert.`;
+        if (data.newlyPaid > 0) msg += ` 🎉 ${data.newlyPaid} Bestellung(en) jetzt vollständig bezahlt.`;
         showAlert('csvUploadAlert', msg, 'success');
         loadPayments(); loadStats(); loadOrders(); loadDashUnpaid();
       } else { showAlert('csvUploadAlert', data.error || 'Fehler beim Verarbeiten.'); }
