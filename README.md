@@ -6,18 +6,19 @@ Github Repo zum halb-automatisieren vom Verkauf der Abiball Tickets!
 
 | Feature | Beschreibung |
 |---|---|
-| 🔑 Zugangscodes generieren | Automatisches Generieren von Zugangscodes für beliebig viele Personen mit konfigurierbarer Ticketanzahl und Namen |
-| 📥 Export | Codes als CSV oder Excel-Datei exportieren |
-| 🌐 Code-Interface | Einfache Weboberfläche zur Eingabe des persönlichen Zugangscodes |
-| 🎟️ Ticket-Bestellung | Pro Person: Anzahl Tickets, Preis, Formular für jedes Ticket (Name, Klasse, …) |
-| 💳 EPC/Girocode | Automatische Generierung von EPC-QR-Codes für vorgefertigte Überweisungen (Banking-App-kompatibel) |
-| 📤 Kontoauszug-Prüfung | Hochladen eines CSV-Kontoauszugs → automatischer Abgleich mit offenen Bestellungen |
-| ✉️ Ticket-QR-Codes | Nach bestätigter Zahlung: QR-Code-Tickets automatisch per E-Mail versenden |
+| Zugangscodes generieren | Automatisches Generieren von Zugangscodes für beliebig viele Personen mit konfigurierbarer Ticketanzahl und Namen |
+| Export | Codes als CSV oder Excel-Datei exportieren |
+| Code-Interface | Einfache Weboberfläche zur Eingabe des persönlichen Zugangscodes |
+| Ticket-Bestellung | Pro Person: Anzahl Tickets, Preis, Formular für jedes Ticket (Name, Klasse, …) |
+| EPC/Girocode | Automatische Generierung von EPC-QR-Codes für vorgefertigte Überweisungen (Banking-App-kompatibel) |
+| Kontoauszug-Prüfung | Hochladen eines CSV-Kontoauszugs → automatischer Abgleich mit offenen Bestellungen |
+| Ticket-QR-Codes | Nach bestätigter Zahlung: QR-Code-Tickets automatisch per E-Mail versenden |
 
 ## Screenshots
 
 ### Startseite – Zugangscode eingeben
-![Startseite](https://github.com/user-attachments/assets/e1e8b409-4455-4c47-b654-5969182ab4bf)
+![Startseite](<img width="2032" height="1108" alt="image" src="https://github.com/user-attachments/assets/59fccecd-a15e-4240-8159-83b9223cf7b8" />
+)
 
 ## Setup
 
