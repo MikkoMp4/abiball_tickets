@@ -10,7 +10,8 @@ Selbst gehostetes System zum Verwalten vom Abiball-Ticket-Verkauf. Zugangscodes 
 - Split-Zahlung: jeder zahlt sein Ticket einzeln, kriegt seinen eigenen QR-Code
 - Kontoauszug (CSV oder PDF) hochladen → System gleicht automatisch mit offenen Bestellungen ab
 - Bei Zahlung: QR-Code-Tickets automatisch per Mail verschickt
-- Admin-Panel zum Überblick behalten, manuell als bezahlt markieren, Codes exportieren usw.
+- Admin-Panel zum Überblick behalten, manuell als bezahlt markieren (ganze Bestellung oder einzelne Tickets), Codes exportieren usw.
+- Bestellungen im Admin sind kollabiert und lassen sich einzeln aufklappen damit es nicht zu unübersichtlich wird
 - QR-Ticket-Validierung beim Einlass
 
 ## Screenshots
@@ -126,10 +127,12 @@ Läuft dann auf http://localhost:3000
 |---|---|---|
 | `POST` | `/api/admin/generate-codes` | Zugangscodes generieren |
 | `GET` | `/api/admin/persons` | Alle Personen |
+| `PATCH` | `/api/admin/persons/:id` | Person bearbeiten (Name, Ticketanzahl) |
 | `DELETE` | `/api/admin/persons/:id` | Person löschen |
 | `GET` | `/api/admin/orders` | Alle Bestellungen inkl. Tickets |
 | `POST` | `/api/admin/orders/:id/mark-paid` | Bestellung komplett als bezahlt |
-| `POST` | `/api/admin/orders/:orderId/ticket/:ticketId/mark-paid` | Einzelnes Ticket als bezahlt |
+| `POST` | `/api/admin/orders/:orderId/ticket/:ticketId/mark-paid` | Einzelnes Ticket als bezahlt markieren |
+| `DELETE` | `/api/admin/orders/:orderId/ticket/:ticketId` | Einzelnes Ticket löschen |
 | `GET` | `/api/admin/stats` | Dashboard-Statistiken |
 | `GET` | `/api/admin/export/csv` | Codes als CSV |
 | `GET` | `/api/admin/export/excel` | Codes als Excel |
@@ -137,6 +140,10 @@ Läuft dann auf http://localhost:3000
 | `POST` | `/api/admin/upload-pdf` | PDF-Kontoauszug hochladen |
 | `GET` | `/api/admin/settings` | Einstellungen lesen |
 | `POST` | `/api/admin/settings` | Einstellungen speichern |
+| `DELETE` | `/api/admin/danger/person/:id` | Person + Daten unwiderruflich löschen |
+| `DELETE` | `/api/admin/danger/order/:id` | Bestellung unwiderruflich löschen |
+| `DELETE` | `/api/admin/danger/payment/:id` | Zahlung löschen + Status neu berechnen |
+| `DELETE` | `/api/admin/danger/all` | Alle Daten löschen (Nuclear) |
 | `POST` | `/api/codes/verify` | Code prüfen |
 | `GET` | `/api/tickets/config` | Ticketpreis + Event-Daten |
 | `POST` | `/api/tickets/order` | Bestellung absenden |

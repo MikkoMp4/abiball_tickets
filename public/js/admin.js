@@ -219,6 +219,7 @@ function renderOrders(orders) {
   if (filter === 'partial') filtered = orders.filter(o => o.paid === 2);
   if (filter === 'unpaid')  filtered = orders.filter(o => o.paid === 0);
   if (filter === 'split')   filtered = orders.filter(o => o.split_payment);
+  if (filter === 'sent')    filtered = orders.filter(o => o.qr_sent);
 
   const tbody = document.getElementById('ordersTbody');
   if (!filtered.length) {
@@ -502,7 +503,6 @@ function setupSettingsSave() {
   });
   document.getElementById('saveBankBtn')?.addEventListener('click', async () => {
     clearAlert('settingsBankAlert');
-    // FIX: key muss 'bank_name' sein (nicht 'bank_recipient') damit ALLOWED_KEYS in settings.js greift
     const body = {
       bank_name: document.getElementById('s-bank-name').value,
       bank_iban: document.getElementById('s-bank-iban').value,
