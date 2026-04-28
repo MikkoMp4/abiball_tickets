@@ -1,11 +1,10 @@
 /**
- * database.js – SQLite-Datenbankinitialisierung
+ * database.js
  */
 const Database = require('better-sqlite3');
 const path     = require('path');
 const fs       = require('fs');
 
-// DATA_DIR comes from .env (e.g. DATA_DIR=/app), DB file sits inside it
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..');
 const DB_PATH  = process.env.DB_PATH  || path.join(DATA_DIR, 'abiball.sqlite');
 
@@ -29,7 +28,6 @@ function getDb() {
       num_tickets INTEGER NOT NULL DEFAULT 1,
       created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     );
-
     CREATE TABLE IF NOT EXISTS orders (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       person_id   INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
@@ -40,7 +38,6 @@ function getDb() {
       epc_blob    TEXT,
       created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     );
-
     CREATE TABLE IF NOT EXISTS order_tickets (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       order_id     INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -49,7 +46,6 @@ function getDb() {
       extra_info   TEXT,
       created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
     );
-
     CREATE TABLE IF NOT EXISTS payments (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       person_id    INTEGER REFERENCES persons(id) ON DELETE SET NULL,
@@ -61,7 +57,6 @@ function getDb() {
       qr_sent      INTEGER NOT NULL DEFAULT 0,
       created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
     );
-
     CREATE TABLE IF NOT EXISTS settings (
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL DEFAULT ''
@@ -71,16 +66,11 @@ function getDb() {
   function hasColumn(table, column) {
     return db.prepare(`PRAGMA table_info(${table})`).all().some(r => r.name === column);
   }
-
-  if (!hasColumn('order_tickets', 'qr_token')) {
-    db.exec('ALTER TABLE order_tickets ADD COLUMN qr_token TEXT UNIQUE');
-  }
-  if (!hasColumn('order_tickets', 'qr_issued_at')) {
-    db.exec('ALTER TABLE order_tickets ADD COLUMN qr_issued_at TEXT');
-  }
+  if (!hasColumn('order_tickets', 'qr_token'))    db.exec('ALTER TABLE order_tickets ADD COLUMN qr_token TEXT UNIQUE');
+  if (!hasColumn('order_tickets', 'qr_issued_at')) db.exec('ALTER TABLE order_tickets ADD COLUMN qr_issued_at TEXT');
+  if (!hasColumn('orders', 'paid_amount'))         db.exec('ALTER TABLE orders ADD COLUMN paid_amount REAL NOT NULL DEFAULT 0');
 
   console.log(`[DB] Using database at: ${DB_PATH}`);
-
   return db;
 }
 
