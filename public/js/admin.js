@@ -311,14 +311,18 @@ async function loadSettings() {
     document.getElementById('s-bank-iban').value      = s.bank_iban      || '';
     document.getElementById('s-bank-bic').value       = s.bank_bic       || '';
     document.getElementById('settingsPreview').textContent = JSON.stringify(s, null, 2);
+
+    // FIX: API returns `envStatus`, not `env`
     const envDiv = document.getElementById('envStatusContent');
-    if (data.env) {
-      envDiv.innerHTML = Object.entries(data.env).map(([k,v]) =>
+    if (envDiv && data.envStatus) {
+      envDiv.innerHTML = Object.entries(data.envStatus).map(([k, v]) =>
         `<div style="display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid var(--border)">
           <code style="font-size:.85rem">${esc(k)}</code>
-          <span class="badge ${v?'badge-success':'badge-muted'}">${v?'✅ Gesetzt':'❌ Nicht gesetzt'}</span>
+          <span class="badge ${v ? 'badge-success' : 'badge-muted'}">${v ? '✅ Gesetzt' : '❌ Nicht gesetzt'}</span>
         </div>`
       ).join('');
+    } else if (envDiv) {
+      envDiv.innerHTML = '<p style="color:var(--muted);font-size:.9rem">Keine Umgebungsvariablen-Daten empfangen.</p>';
     }
   } catch { /* silent */ }
 }
