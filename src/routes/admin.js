@@ -2,16 +2,15 @@
  * routes/admin.js – Admin-Endpunkte
  *
  * POST   /api/admin/generate-codes          – Codes für mehrere Personen generieren
- *          Input format per person: { name, numTickets }  (email omitted – users enter it themselves)
  * GET    /api/admin/persons                 – Alle Personen auflisten
  * PATCH  /api/admin/persons/:id             – Person aktualisieren
- * DELETE /api/admin/persons/:id             – Person löschen (CASCADE: orders, order_tickets, payments NULLed)
+ * DELETE /api/admin/persons/:id             – Person löschen (CASCADE)
  * GET    /api/admin/orders                  – Alle Bestellungen auflisten
  * GET    /api/admin/stats                   – Dashboard-Statistiken
- * POST   /api/admin/upload-pdf              – Bank-PDF hochladen und Zahlungen abgleichen
+ * POST   /api/admin/upload-pdf              – Bank-PDF hochladen, abgleichen, E-Mails senden
  * GET    /api/admin/export/csv              – Codes als CSV exportieren
  * GET    /api/admin/export/excel            – Codes als Excel exportieren
- * POST   /api/admin/orders/:id/mark-paid   – Bestellung als bezahlt markieren
+ * POST   /api/admin/orders/:id/mark-paid   – Bestellung als bezahlt markieren + E-Mail senden
  *
  * ── DANGER ZONE ─────────────────────────────────────────────────────────────
  * DELETE /api/admin/danger/person/:id       – Einzelne Person + alle Daten löschen
@@ -29,11 +28,13 @@ const { createObjectCsvStringifier } = require('csv-writer');
 const { getDb, getSettings }         = require('../database');
 const { generateUniqueCodes }        = require('../utils/codeGenerator');
 const { parseBankPdf }               = require('../utils/pdfParser');
+const { generateQrBuffer }           = require('../utils/qrGenerator');
+const { sendTicketEmail }            = require('../utils/emailSender');
 
 // Multer: PDF-Upload im Arbeitsspeicher
 const pdfUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+  limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     cb(null, ext === '.pdf');
@@ -64,6 +65,38 @@ async function requireDangerPw(req, res, next) {
   next();
 }
 
+/**
+ * Shared helper: send one QR-email per ticket for a given order.
+ * Reads recipient address from ticket_email column.
+ * Returns array of addresses that were emailed.
+ */
+async function sendTicketsForOrder(db, person, order) {
+  const orderTickets = db.prepare('SELECT * FROM order_tickets WHERE order_id = ?').all(order.id);
+  const sentTo = [];
+
+  for (const ticket of orderTickets) {
+    const toEmail = (ticket.ticket_email || '').trim();
+    if (!toEmail) continue;
+
+    const qrBuffer = await generateQrBuffer(JSON.stringify({
+      ticketId:   ticket.id,
+      orderId:    order.id,
+      personCode: person.code,
+      name:       ticket.ticket_name,
+    }));
+
+    await sendTicketEmail({
+      to:         toEmail,
+      personName: ticket.ticket_name || person.name,
+      qrBuffers:  [qrBuffer],
+    });
+
+    sentTo.push(toEmail);
+  }
+
+  return sentTo;
+}
+
 // ── POST /api/admin/generate-codes ────────────────────────────────────────────
 router.post('/generate-codes', (req, res) => {
   const { persons } = req.body;
@@ -83,7 +116,7 @@ router.post('/generate-codes', (req, res) => {
     return list.map((p, i) =>
       insert.run({
         name:       p.name || 'Unbekannt',
-        email:      '',          // email always empty – filled in by ticket holders
+        email:      '',
         code:       codes[i],
         numTickets: p.numTickets || 1,
       })
@@ -132,8 +165,6 @@ router.patch('/persons/:id', (req, res) => {
 });
 
 // ── DELETE /api/admin/persons/:id ────────────────────────────────────────────
-// CASCADE in schema handles orders → order_tickets automatically.
-// payments.person_id is SET NULL on delete (preserved for audit trail).
 router.delete('/persons/:id', (req, res) => {
   const db = getDb();
   const info = db.prepare('DELETE FROM persons WHERE id = ?').run(req.params.id);
@@ -141,7 +172,7 @@ router.delete('/persons/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// ── GET /api/admin/orders ────────────────────────────────────────────────
+// ── GET /api/admin/orders ───────────────────────────────────────────────
 router.get('/orders', (req, res) => {
   const db = getDb();
   const orders = db.prepare(`
@@ -183,6 +214,8 @@ router.get('/stats', (req, res) => {
 });
 
 // ── POST /api/admin/upload-pdf ───────────────────────────────────────────────
+// Parses bank PDF, matches payments, marks orders paid,
+// and auto-sends QR ticket emails to every newly matched person.
 router.post('/upload-pdf', pdfUpload.array('pdfs', 20), async (req, res) => {
   if (!req.files || req.files.length === 0) {
     return res.status(400).json({ error: 'Keine PDF-Datei hochgeladen' });
@@ -190,8 +223,8 @@ router.post('/upload-pdf', pdfUpload.array('pdfs', 20), async (req, res) => {
 
   const db          = getDb();
   const settings    = getSettings();
-  const ticketPrice = parseFloat(settings.ticket_price || '45');
   const allResults  = [];
+  const matchedForEmail = []; // collect { person, order } for email sending after DB work
 
   for (const file of req.files) {
     let transactions;
@@ -227,6 +260,7 @@ router.post('/upload-pdf', pdfUpload.array('pdfs', 20), async (req, res) => {
           db.prepare('UPDATE payments SET matched = 1, person_id = ? WHERE id = ?').run(person.id, existingPayment.id);
         }
         markedPaid = true;
+        matchedForEmail.push({ person, order });
       }
 
       allResults.push({
@@ -241,18 +275,51 @@ router.post('/upload-pdf', pdfUpload.array('pdfs', 20), async (req, res) => {
     }
   }
 
-  const newlyPaid = allResults.filter(r => r.markedPaid).length;
-  res.json({ processed: allResults.length, newlyPaid, results: allResults });
+  // Send emails outside the PDF-parsing loop (async I/O, non-blocking to DB)
+  const emailResults = [];
+  for (const { person, order } of matchedForEmail) {
+    try {
+      const sentTo = await sendTicketsForOrder(db, person, order);
+      emailResults.push({ person: person.name, sentTo, ok: true });
+    } catch (err) {
+      emailResults.push({ person: person.name, error: err.message, ok: false });
+    }
+  }
+
+  res.json({
+    processed: allResults.length,
+    newlyPaid: matchedForEmail.length,
+    emailsSent: emailResults,
+    results: allResults,
+  });
 });
 
 // ── POST /api/admin/orders/:id/mark-paid ─────────────────────────────────────────
-router.post('/orders/:id/mark-paid', (req, res) => {
+// Marks order as paid and immediately sends QR ticket emails.
+router.post('/orders/:id/mark-paid', async (req, res) => {
   const db    = getDb();
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Bestellung nicht gefunden' });
+
   if (order.paid) return res.json({ ok: true, alreadyPaid: true });
+
   db.prepare("UPDATE orders SET paid = 1, paid_at = datetime('now') WHERE id = ?").run(req.params.id);
-  res.json({ ok: true });
+
+  // Reload order after update so paid=1 is reflected
+  const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  const person       = db.prepare('SELECT * FROM persons WHERE id = ?').get(updatedOrder.person_id);
+
+  let emailResult = null;
+  if (person) {
+    try {
+      const sentTo = await sendTicketsForOrder(db, person, updatedOrder);
+      emailResult = { ok: true, sentTo };
+    } catch (err) {
+      emailResult = { ok: false, error: err.message };
+    }
+  }
+
+  res.json({ ok: true, email: emailResult });
 });
 
 // ── GET /api/admin/export/csv ────────────────────────────────────────────────
@@ -300,32 +367,22 @@ router.get('/export/excel', async (req, res) => {
 // ⚠️  DANGER ZONE  – alle Endpunkte erfordern dangerPassword im Request-Body
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// DELETE /danger/person/:id
-// CASCADE on persons → orders → order_tickets handles all children automatically.
-// payments.person_id is SET NULL (kept for audit trail).
 router.delete('/danger/person/:id', requireDangerPw, (req, res) => {
   const db     = getDb();
   const person = db.prepare('SELECT * FROM persons WHERE id = ?').get(req.params.id);
   if (!person) return res.status(404).json({ error: 'Person nicht gefunden' });
-
   db.prepare('DELETE FROM persons WHERE id = ?').run(req.params.id);
-
   res.json({ ok: true, deleted: 'person', id: req.params.id, name: person.name });
 });
 
-// DELETE /danger/order/:id
-// CASCADE on orders → order_tickets handles child rows automatically.
 router.delete('/danger/order/:id', requireDangerPw, (req, res) => {
   const db    = getDb();
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Bestellung nicht gefunden' });
-
   db.prepare('DELETE FROM orders WHERE id = ?').run(req.params.id);
-
   res.json({ ok: true, deleted: 'order', id: req.params.id });
 });
 
-// DELETE /danger/payment/:id
 router.delete('/danger/payment/:id', requireDangerPw, (req, res) => {
   const db      = getDb();
   const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(req.params.id);
@@ -343,19 +400,14 @@ router.delete('/danger/payment/:id', requireDangerPw, (req, res) => {
   res.json({ ok: true, deleted: 'payment', id: req.params.id });
 });
 
-// DELETE /danger/all – nuclear option
 router.delete('/danger/all', requireDangerPw, (req, res) => {
   const db = getDb();
-
-  // With CASCADE enabled, deleting persons cascades to orders → order_tickets.
-  // payments are handled separately to avoid FK issues with SET NULL.
   db.transaction(() => {
     db.prepare('DELETE FROM payments').run();
     db.prepare('DELETE FROM order_tickets').run();
     db.prepare('DELETE FROM orders').run();
     db.prepare('DELETE FROM persons').run();
   })();
-
   res.json({ ok: true, deleted: 'all' });
 });
 
