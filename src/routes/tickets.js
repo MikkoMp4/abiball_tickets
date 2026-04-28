@@ -4,7 +4,7 @@
  * GET    /api/tickets/config
  * POST   /api/tickets/order                              (race-condition-safe, partial orders)
  * POST   /api/tickets/order/:orderId/add                 (Ticket nachträglich hinzufügen)
- * GET    /api/tickets/my-order?code=CODE                 (Manage-Mode)
+ * GET    /api/tickets/my-order?code=CODE                 (Manage-Mode, inkl. ticket-QR-DataURLs)
  * PATCH  /api/tickets/order/:orderId/ticket/:ticketId    (Name/E-Mail ändern)
  * DELETE /api/tickets/order/:orderId/ticket/:ticketId    (Ticket löschen, user-seitig)
  * POST   /api/tickets/validate                           (QR-Token prüfen)
@@ -32,7 +32,7 @@ router.get('/config', (req, res) => {
 
 // ── POST /api/tickets/order ───────────────────────────────────────────────
 router.post('/order', async (req, res) => {
-  const { personId, tickets, splitPayment } = req.body;
+  const { personId, tickets } = req.body;
   if (!personId || !Array.isArray(tickets) || tickets.length === 0)
     return res.status(400).json({ error: 'personId und tickets erforderlich' });
 
@@ -61,8 +61,6 @@ router.post('/order', async (req, res) => {
 
   const totalEur   = tickets.length * TICKET_CONFIG.price;
   const baseRef    = `ABIBALL-${person.code}`;
-  // splitPayment wird erst NACH der Bestellung gesetzt (auf der Zahlungsseite)
-  // Beim initialen POST ist splitPayment immer false
   const epcPayload = buildEpcPayload({
     name: TICKET_CONFIG.accountName, iban: TICKET_CONFIG.iban,
     bic: TICKET_CONFIG.bic, amount: totalEur, reference: baseRef,
@@ -120,8 +118,6 @@ router.post('/order', async (req, res) => {
 });
 
 // ── POST /api/tickets/order/:orderId/enable-split ────────────────────────────
-// Aktiviert Split-Payment für eine bestehende (unbezahlte) Bestellung.
-// Generiert pro Ticket eine eigene Referenz + EPC-Blob.
 router.post('/order/:orderId/enable-split', async (req, res) => {
   const { code } = req.body;
   if (!code) return res.status(400).json({ error: 'code erforderlich' });
@@ -153,7 +149,6 @@ router.post('/order/:orderId/enable-split', async (req, res) => {
     db.prepare('UPDATE orders SET split_payment = 1 WHERE id = ?').run(req.params.orderId);
   })();
 
-  // QR-DataURLs generieren (ausserhalb der Transaktion)
   const result = await Promise.all(splitEpcQrs.map(async s => ({
     ticketId: s.ticketId,
     ref:      s.ref,
@@ -164,7 +159,6 @@ router.post('/order/:orderId/enable-split', async (req, res) => {
 });
 
 // ── POST /api/tickets/order/:orderId/disable-split ───────────────────────────
-// Deaktiviert Split-Payment → zurück zur gemeinsamen Überweisung.
 router.post('/order/:orderId/disable-split', async (req, res) => {
   const { code } = req.body;
   if (!code) return res.status(400).json({ error: 'code erforderlich' });
@@ -258,11 +252,11 @@ router.get('/my-order', async (req, res) => {
 
   const tickets = db.prepare('SELECT * FROM order_tickets WHERE order_id = ?').all(order.id);
 
-  // Restbetrag berechnen: total_eur minus bereits bezahlte Tickets
+  // Restbetrag berechnen
   const paidAmount   = parseFloat(order.paid_amount || 0);
   const remaining    = Math.max(0, parseFloat(order.total_eur) - paidAmount);
 
-  // EPC-QR immer für den RESTBETRAG generieren (falls nicht voll bezahlt)
+  // EPC-QR für Restbetrag (gemeinsame Zahlung)
   let epcQr = null;
   if (order.paid !== 1 && remaining > 0) {
     const s = getSettings();
@@ -278,12 +272,25 @@ router.get('/my-order', async (req, res) => {
     epcQr = await generateQrDataUrl(order.epc_blob);
   }
 
-  // Split-EPC-QRs + ticket_paid-Status pro Ticket
+  // Pro Ticket: Split-EPC-QR (nur wenn nicht bezahlt) + Ticket-QR-Code (immer, für QR-Tab)
   const ticketsWithQr = await Promise.all(tickets.map(async t => {
-    let sqr = null;
-    // Kein QR mehr für bereits bezahlte Split-Tickets
-    if (t.split_epc_blob && !t.ticket_paid) sqr = await generateQrDataUrl(t.split_epc_blob);
-    return { ...t, splitEpcQr: sqr };
+    // Split-Zahlungs-QR: nur wenn Split aktiv und Ticket noch nicht bezahlt
+    let splitEpcQr = null;
+    if (t.split_epc_blob && !t.ticket_paid) {
+      splitEpcQr = await generateQrDataUrl(t.split_epc_blob);
+    }
+
+    // Ticket-QR (der eigentliche Einlass-QR): immer generieren damit Nutzer ihn im QR-Tab sieht.
+    // generateQrBufferForTicket erzeugt/erneuert qr_token in der DB und gibt PNG-Buffer zurück.
+    let ticketQrDataUrl = null;
+    try {
+      const qrBuf = await generateQrBufferForTicket(db, t, { orderId: order.id, personCode: person.code });
+      ticketQrDataUrl = 'data:image/png;base64,' + qrBuf.toString('base64');
+    } catch (e) {
+      console.error('[my-order] QR generation failed for ticket', t.id, e.message);
+    }
+
+    return { ...t, splitEpcQr, ticketQrDataUrl };
   }));
 
   const s = getSettings();

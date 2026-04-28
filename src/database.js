@@ -92,6 +92,9 @@ function getDb() {
     db.exec('ALTER TABLE order_tickets ADD COLUMN qr_token TEXT');
   if (!hasColumn('order_tickets', 'qr_issued_at'))
     db.exec('ALTER TABLE order_tickets ADD COLUMN qr_issued_at TEXT');
+  // FIX: ticket_paid war in migrations vergessen
+  if (!hasColumn('order_tickets', 'ticket_paid'))
+    db.exec('ALTER TABLE order_tickets ADD COLUMN ticket_paid INTEGER NOT NULL DEFAULT 0');
 
   // UNIQUE-Index für qr_token (separat, da SQLite kein UNIQUE bei ALTER TABLE erlaubt)
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_order_tickets_qr_token ON order_tickets (qr_token) WHERE qr_token IS NOT NULL');
