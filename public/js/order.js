@@ -16,8 +16,8 @@ const submitBtn      = document.getElementById('submitBtn');
 const alertBox       = document.getElementById('alertBox');
 const alertBox2      = document.getElementById('alertBox2');
 
-let person = null;
-let config = null;
+let person         = null;
+let config         = null;
 let currentOrder   = null;
 let currentTickets = [];
 
@@ -156,7 +156,10 @@ function renderTicketList(tickets, editMode) {
 
     if (editMode) {
       div.innerHTML = `
-        <strong>Ticket ${i + 1}</strong>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem">
+          <strong>Ticket ${i + 1}</strong>
+          ${!currentOrder.paid ? `<button class="btn btn-danger delete-ticket-btn" style="padding:.25rem .75rem;font-size:.85rem" title="Ticket löschen">🗑 Löschen</button>` : ''}
+        </div>
         <div class="form-group" style="margin-top:.5rem">
           <label>Name</label>
           <input class="edit-name" type="text" value="${esc(ticket.ticket_name)}" required>
@@ -171,6 +174,11 @@ function renderTicketList(tickets, editMode) {
         <div class="ticket-feedback" style="margin-top:.5rem"></div>
       `;
       div.querySelector('.save-ticket-btn').addEventListener('click', () => saveTicket(div, ticket));
+
+      const deleteBtn = div.querySelector('.delete-ticket-btn');
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', () => confirmDeleteTicket(ticket, i));
+      }
     } else {
       div.innerHTML = `
         <strong>Ticket ${i + 1}</strong>
@@ -184,6 +192,66 @@ function renderTicketList(tickets, editMode) {
   });
 }
 
+// ── Ticket löschen (user-seitig) ─────────────────────────────────────────────
+async function confirmDeleteTicket(ticket, index) {
+  const manageAlert = document.getElementById('manageAlertBox');
+
+  if (currentTickets.length <= 1) {
+    showAlert(manageAlert,
+      'Mindestens ein Ticket muss in der Bestellung verbleiben. Wende dich an das Orga-Team, um die gesamte Bestellung zu stornieren.',
+      'warning'
+    );
+    return;
+  }
+
+  if (!confirm(`Ticket ${index + 1} (${ticket.ticket_name}) wirklich löschen?`)) return;
+
+  try {
+    const res = await fetch(
+      `/api/tickets/order/${currentOrder.id}/ticket/${ticket.id}`,
+      {
+        method:  'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ code }),
+      }
+    );
+    const data = await res.json();
+
+    if (res.status === 409 && data.error === 'paid_order') {
+      showAlert(manageAlert,
+        '⛔ Diese Bestellung wurde bereits bezahlt. Änderungen sind nicht mehr möglich. Bitte wende dich an das Orga-Team.',
+        'danger'
+      );
+      return;
+    }
+    if (res.status === 409 && data.error === 'last_ticket') {
+      showAlert(manageAlert,
+        'Mindestens ein Ticket muss verbleiben. Wende dich ans Orga-Team, um die Bestellung vollständig zu stornieren.',
+        'warning'
+      );
+      return;
+    }
+    if (!res.ok) {
+      showAlert(manageAlert, data.error || 'Fehler beim Löschen.', 'danger');
+      return;
+    }
+
+    // Lokal entfernen und neu rendern
+    currentTickets = currentTickets.filter(t => t.id !== ticket.id);
+    currentOrder.total_eur = data.newTotalEur;
+
+    // Gesamtpreis in der Zahlungsinfo aktualisieren
+    const payAmountEl = document.getElementById('payAmount');
+    if (payAmountEl) payAmountEl.textContent = fmt(data.newTotalEur);
+
+    renderTicketList(currentTickets, true);
+    showAlert(manageAlert, '✓ Ticket erfolgreich gelöscht.', 'success');
+
+  } catch {
+    showAlert(manageAlert, 'Verbindungsfehler beim Löschen.', 'danger');
+  }
+}
+
 // ── Ticket speichern (PATCH) ─────────────────────────────────────────────────
 async function saveTicket(div, ticket) {
   const nameInput  = div.querySelector('.edit-name');
@@ -194,19 +262,27 @@ async function saveTicket(div, ticket) {
   const ticketName  = nameInput.value.trim();
   const ticketEmail = emailInput.value.trim();
 
-  if (!ticketName) { feedback.innerHTML = '<span style="color:red">Name darf nicht leer sein.</span>'; return; }
+  if (!ticketName) {
+    feedback.innerHTML = '<span style="color:red">Name darf nicht leer sein.</span>';
+    return;
+  }
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ticketEmail)) {
-    feedback.innerHTML = '<span style="color:red">Ungültige E-Mail-Adresse.</span>'; return;
+    feedback.innerHTML = '<span style="color:red">Ungültige E-Mail-Adresse.</span>';
+    return;
   }
 
-  saveBtn.disabled = true;
+  saveBtn.disabled    = true;
   saveBtn.textContent = 'Speichere…';
-  feedback.innerHTML = '';
+  feedback.innerHTML  = '';
 
   try {
     const res = await fetch(
       `/api/tickets/order/${currentOrder.id}/ticket/${ticket.id}`,
-      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, ticketName, ticketEmail }) }
+      {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ code, ticketName, ticketEmail }),
+      }
     );
     const data = await res.json();
 
@@ -217,14 +293,23 @@ async function saveTicket(div, ticket) {
 
     ticket.ticket_name  = ticketName;
     ticket.ticket_email = ticketEmail;
-    feedback.innerHTML = '<span style="color:green">✓ Gespeichert</span>';
+    feedback.innerHTML  = '<span style="color:green">✓ Gespeichert</span>';
 
+    const manageAlert = document.getElementById('manageAlertBox');
     if (data.emailChanged && data.paid) {
-      showAlert(
-        document.getElementById('manageAlertBox'),
-        '📧 Die E-Mail-Adresse hat sich geändert. Bitte das Komitee kontaktieren – das Ticket muss erneut gesendet werden.',
-        'warning'
-      );
+      if (data.emailResent) {
+        showAlert(
+          manageAlert,
+          '📧 E-Mail-Adresse geändert – ein aktualisiertes Ticket wurde automatisch an die neue Adresse gesendet.',
+          'success'
+        );
+      } else {
+        showAlert(
+          manageAlert,
+          '⚠️ E-Mail-Adresse geändert, aber das Versenden des aktualisierten Tickets ist fehlgeschlagen. Bitte das Orga-Team kontaktieren.',
+          'warning'
+        );
+      }
     }
   } catch {
     feedback.innerHTML = '<span style="color:red">Verbindungsfehler.</span>';
@@ -277,7 +362,7 @@ submitBtn.addEventListener('click', async () => {
     const emailInput = form.querySelector('[name=ticketEmail]');
     const name  = nameInput?.value.trim();
     const email = emailInput?.value.trim();
-    if (!name) { showAlert(alertBox, 'Bitte alle Ticket-Namen ausfüllen.'); nameInput.focus(); return; }
+    if (!name)  { showAlert(alertBox, 'Bitte alle Ticket-Namen ausfüllen.'); nameInput.focus(); return; }
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       showAlert(alertBox, 'Bitte eine gültige E-Mail-Adresse für jedes Ticket eingeben.'); emailInput.focus(); return;
     }
@@ -315,6 +400,15 @@ submitBtn.addEventListener('click', async () => {
       const img = document.getElementById('epcQrImg');
       if (img) { img.src = data.epcQr; img.style.display = 'block'; }
     }
+
+    // Nach erfolgreicher Bestellung: Edit-Sektion direkt anzeigen
+    currentOrder   = { id: data.orderId, total_eur: data.totalEur, paid: 0 };
+    currentTickets = tickets.map((t, idx) => ({
+      id:           null, // noch nicht bekannt bis Reload
+      ticket_name:  t.ticketName,
+      ticket_email: t.ticketEmail,
+    }));
+
   } catch {
     showAlert(alertBox, 'Verbindungsfehler. Bitte versuche es erneut.');
   } finally {

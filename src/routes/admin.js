@@ -29,7 +29,7 @@ const { createObjectCsvStringifier } = require('csv-writer');
 const { getDb, getSettings }         = require('../database');
 const { generateUniqueCodes }        = require('../utils/codeGenerator');
 const { parseBankPdf }               = require('../utils/pdfParser');
-const { generateQrBuffer }           = require('../utils/qrGenerator');
+const { generateQrBufferForTicket }  = require('../utils/qrGenerator');
 const { sendTicketEmail }            = require('../utils/emailSender');
 
 const pdfUpload = multer({
@@ -53,15 +53,19 @@ async function requireDangerPw(req, res, next) {
   next();
 }
 
+/**
+ * Sendet alle Tickets einer Bestellung per E-Mail.
+ * Rotiert dabei den qr_token jedes Tickets (alter QR wird ungültig).
+ */
 async function sendTicketsForOrder(db, person, order) {
   const orderTickets = db.prepare('SELECT * FROM order_tickets WHERE order_id = ?').all(order.id);
   const sentTo = [];
   for (const ticket of orderTickets) {
     const toEmail = (ticket.ticket_email || '').trim();
     if (!toEmail) continue;
-    const qrBuffer = await generateQrBuffer(JSON.stringify({
-      ticketId: ticket.id, orderId: order.id, personCode: person.code, name: ticket.ticket_name,
-    }));
+    const qrBuffer = await generateQrBufferForTicket(db, ticket, {
+      orderId: order.id, personCode: person.code,
+    });
     await sendTicketEmail({ to: toEmail, personName: ticket.ticket_name || person.name, qrBuffers: [qrBuffer] });
     sentTo.push(toEmail);
   }
@@ -207,10 +211,6 @@ router.post('/orders/:id/mark-paid', async (req, res) => {
 });
 
 // ── DELETE /api/admin/orders/:orderId/ticket/:ticketId ───────────────────────
-// ADMIN-ONLY: Einzelnes Ticket aus einer Bestellung löschen.
-// Kein dangerPassword nötig – normale Admin-Session reicht.
-// Bei bezahlten Bestellungen wird error-code 'paid_order' zurückgegeben,
-// damit das Admin-Frontend einen Bestätigungsdialog zeigen kann.
 router.delete('/orders/:orderId/ticket/:ticketId', (req, res) => {
   const db = getDb();
   const s  = getSettings();
