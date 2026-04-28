@@ -1,16 +1,96 @@
 /* admin.js – Admin-Dashboard */
 
-// ── Tabs ─────────────────────────────────────────────────────────────────────
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
-  });
+// ── Auth ──────────────────────────────────────────────────────────────────
+(async function initAuth() {
+  const overlay  = document.getElementById('loginOverlay');
+  const content  = document.getElementById('adminContent');
+  const input    = document.getElementById('loginInput');
+  const btn      = document.getElementById('loginBtn');
+  const errEl    = document.getElementById('loginError');
+
+  // 1. Check if device already has a valid session cookie
+  try {
+    const res = await fetch('/api/auth/check');
+    if (res.ok) {
+      showAdminContent();
+      return;
+    }
+  } catch { /* show login */ }
+
+  // 2. Show login form
+  overlay.style.display = 'flex';
+
+  async function attemptLogin() {
+    const pw = input.value;
+    if (!pw) return;
+    btn.disabled = true;
+    btn.textContent = '…';
+    errEl.textContent = '';
+    try {
+      const res  = await fetch('/api/auth/login', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ password: pw }),
+      });
+      if (res.ok) {
+        showAdminContent();
+      } else {
+        const d = await res.json();
+        errEl.textContent = d.error || 'Falsches Passwort.';
+        input.value = '';
+        input.focus();
+      }
+    } catch {
+      errEl.textContent = 'Verbindungsfehler.';
+    }
+    btn.disabled = false;
+    btn.textContent = 'Einloggen';
+  }
+
+  btn.addEventListener('click', attemptLogin);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') attemptLogin(); });
+
+  function showAdminContent() {
+    overlay.style.display = 'none';
+    content.style.display  = 'block';
+    initDashboard();
+  }
+})();
+
+// ── Logout ──────────────────────────────────────────────────────────────
+document.getElementById('logoutBtn')?.addEventListener('click', async () => {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  location.reload();
 });
 
-// ── Hilfsfunktionen ───────────────────────────────────────────────────────────
+// ── Main init (called after auth) ──────────────────────────────────────────
+function initDashboard() {
+  setupTabs();
+  loadStats();
+  loadDashUnpaid();
+  loadOrders();
+  loadPersons();
+  loadPayments();
+  loadSettings();
+  setupSettingsSave();
+  setupCsvUpload();
+  setupPdfUpload();
+  setupGenerateCodes();
+}
+
+// ── Tabs ───────────────────────────────────────────────────────────────────
+function setupTabs() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+    });
+  });
+}
+
+// ── Hilfsfunktionen ─────────────────────────────────────────────────────────────
 function showAlert(id, msg, type = 'danger') {
   const el = document.getElementById(id);
   if (el) el.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
@@ -42,6 +122,7 @@ function setBtn(id, disabled, html) {
 async function loadStats() {
   try {
     const res  = await fetch('/api/admin/stats');
+    if (res.status === 401) return; // not authed yet
     const data = await res.json();
     document.getElementById('st-persons').textContent     = data.totalPersons;
     document.getElementById('st-orders').textContent      = data.totalOrders;
@@ -59,6 +140,7 @@ async function loadStats() {
 async function loadDashUnpaid() {
   try {
     const res  = await fetch('/api/admin/orders');
+    if (res.status === 401) return;
     const data = await res.json();
     const unpaid = (data.orders || []).filter(o => !o.paid);
     const tbody  = document.getElementById('dashUnpaidTbody');
@@ -80,10 +162,11 @@ async function loadDashUnpaid() {
   }
 }
 
-// ── Personen laden ────────────────────────────────────────────────────────────
+// ── Personen laden ─────────────────────────────────────────────────────────────
 async function loadPersons() {
   try {
     const res  = await fetch('/api/admin/persons');
+    if (res.status === 401) return;
     const data = await res.json();
     renderPersons(data.persons || []);
   } catch {
@@ -108,7 +191,7 @@ function renderPersons(persons) {
       <td style="font-size:.82rem;color:var(--muted)">${esc(p.created_at?.slice(0,16) || '')}</td>
       <td>
         <button class="btn btn-danger" style="padding:.3rem .7rem;font-size:.8rem"
-          onclick="deletePerson(${p.id})">🗑</button>
+          onclick="deletePerson(${p.id})">&#x1F5D1;</button>
       </td>
     </tr>
   `).join('');
@@ -121,50 +204,53 @@ window.deletePerson = async function(id) {
   else showAlert('personsAlert', 'Fehler beim Löschen.');
 };
 
-// ── Codes generieren ──────────────────────────────────────────────────────────
-document.getElementById('generateBtn').addEventListener('click', async () => {
-  clearAlert('genAlert');
-  const raw = document.getElementById('personsBulk').value.trim();
-  if (!raw) { showAlert('genAlert', 'Bitte Personen eingeben.', 'warning'); return; }
+// ── Codes generieren ─────────────────────────────────────────────────────────
+function setupGenerateCodes() {
+  document.getElementById('generateBtn')?.addEventListener('click', async () => {
+    clearAlert('genAlert');
+    const raw = document.getElementById('personsBulk').value.trim();
+    if (!raw) { showAlert('genAlert', 'Bitte Personen eingeben.', 'warning'); return; }
 
-  const lines   = raw.split('\n').map(l => l.trim()).filter(Boolean);
-  const persons = lines.map(line => {
-    const parts = line.split(';').map(s => s.trim());
-    return {
-      name:       parts[0] || 'Unbekannt',
-      email:      parts[1] || '',
-      numTickets: parseInt(parts[2], 10) || 1,
-    };
-  });
-
-  setBtn('generateBtn', true, '<span class="spinner"></span> Generiere…');
-
-  try {
-    const res  = await fetch('/api/admin/generate-codes', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ persons }),
+    const lines   = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    const persons = lines.map(line => {
+      const parts = line.split(';').map(s => s.trim());
+      return {
+        name:       parts[0] || 'Unbekannt',
+        email:      parts[1] || '',
+        numTickets: parseInt(parts[2], 10) || 1,
+      };
     });
-    const data = await res.json();
-    if (!res.ok) { showAlert('genAlert', data.error || 'Fehler.'); return; }
 
-    showAlert('genAlert', `✅ ${data.created.length} Code(s) erfolgreich generiert.`, 'success');
-    document.getElementById('personsBulk').value = '';
-    loadPersons();
-    loadStats();
-  } catch {
-    showAlert('genAlert', 'Verbindungsfehler.');
-  } finally {
-    setBtn('generateBtn', false, 'Codes generieren');
-  }
-});
+    setBtn('generateBtn', true, '<span class="spinner"></span> Generiere…');
 
-// ── Bestellungen laden ────────────────────────────────────────────────────────
+    try {
+      const res  = await fetch('/api/admin/generate-codes', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ persons }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showAlert('genAlert', data.error || 'Fehler.'); return; }
+
+      showAlert('genAlert', `✅ ${data.created.length} Code(s) erfolgreich generiert.`, 'success');
+      document.getElementById('personsBulk').value = '';
+      loadPersons();
+      loadStats();
+    } catch {
+      showAlert('genAlert', 'Verbindungsfehler.');
+    } finally {
+      setBtn('generateBtn', false, 'Codes generieren');
+    }
+  });
+}
+
+// ── Bestellungen laden ──────────────────────────────────────────────────────────
 let allOrders = [];
 
 async function loadOrders() {
   try {
     const res  = await fetch('/api/admin/orders');
+    if (res.status === 401) return;
     const data = await res.json();
     allOrders  = data.orders || [];
     renderOrders(allOrders);
@@ -178,7 +264,6 @@ function renderOrders(orders) {
   let filtered = orders;
   if (filter === 'paid')   filtered = orders.filter(o => o.paid);
   if (filter === 'unpaid') filtered = orders.filter(o => !o.paid);
-  // 'sent' filter – check via payments table; approximate via paid && qr_sent
   if (filter === 'sent')   filtered = orders.filter(o => o.paid);
 
   const tbody = document.getElementById('ordersTbody');
@@ -188,8 +273,8 @@ function renderOrders(orders) {
   }
 
   tbody.innerHTML = filtered.map(o => {
-    const ticketNames = (o.tickets || []).map(t => esc(t.ticket_name)).join(', ') || '–';
-    const ticketNamesAttr = (o.tickets || []).map(t => esc(t.ticket_name)).join(', ').replace(/"/g, '&quot;') || '–';
+    const ticketNames     = (o.tickets || []).map(t => esc(t.ticket_name)).join(', ') || '–';
+    const ticketNamesAttr = ticketNames.replace(/"/g, '&quot;');
     return `
       <tr>
         <td><strong>${esc(o.person_name)}</strong></td>
@@ -210,7 +295,7 @@ function renderOrders(orders) {
   }).join('');
 }
 
-document.getElementById('ordersFilter').addEventListener('change', () => renderOrders(allOrders));
+document.getElementById('ordersFilter')?.addEventListener('change', () => renderOrders(allOrders));
 
 window.markPaid = async function(orderId, btn) {
   if (!confirm('Bestellung manuell als bezahlt markieren?')) return;
@@ -235,7 +320,7 @@ window.markPaid = async function(orderId, btn) {
   }
 };
 
-// ── Zahlungen laden ───────────────────────────────────────────────────────────
+// ── Zahlungen laden ────────────────────────────────────────────────────────────
 async function loadPayments() {
   try {
     const res  = await fetch('/api/payments');
@@ -298,226 +383,155 @@ window.sendTickets = async function(paymentId, btn) {
   }
 };
 
-// ── PDF hochladen ─────────────────────────────────────────────────────────────
-document.getElementById('pdfUploadBtn').addEventListener('click', async () => {
-  const fileInput = document.getElementById('pdfFiles');
-  if (!fileInput.files.length) {
-    showAlert('pdfUploadAlert', 'Bitte mindestens eine PDF-Datei auswählen.', 'warning');
-    return;
-  }
-
-  setBtn('pdfUploadBtn', true, '<span class="spinner"></span> Verarbeite PDFs…');
-  clearAlert('pdfUploadAlert');
-  document.getElementById('pdfResultCard').style.display = 'none';
-
-  const form = new FormData();
-  for (const f of fileInput.files) form.append('pdfs', f);
-
-  try {
-    const res  = await fetch('/api/admin/upload-pdf', { method: 'POST', body: form });
-    const data = await res.json();
-
-    if (!res.ok) { showAlert('pdfUploadAlert', data.error || 'Fehler.'); return; }
-
-    showAlert('pdfUploadAlert',
-      `✅ ${data.processed} Einträge gefunden, <strong>${data.newlyPaid}</strong> Bestellung(en) als bezahlt markiert.`,
-      data.newlyPaid > 0 ? 'success' : 'info'
-    );
-    fileInput.value = '';
-
-    // Ergebnis anzeigen
-    if (data.results && data.results.length > 0) {
-      renderPdfResults(data.results);
-      document.getElementById('pdfResultCard').style.display = 'block';
+// ── PDF hochladen ──────────────────────────────────────────────────────────────
+function setupPdfUpload() {
+  document.getElementById('pdfUploadBtn')?.addEventListener('click', async () => {
+    const fileInput = document.getElementById('pdfFiles');
+    if (!fileInput.files.length) {
+      showAlert('pdfUploadAlert', 'Bitte mindestens eine PDF-Datei auswählen.', 'warning');
+      return;
     }
 
-    loadPayments();
-    loadOrders();
-    loadStats();
-    loadDashUnpaid();
-  } catch {
-    showAlert('pdfUploadAlert', 'Verbindungsfehler.');
-  } finally {
-    setBtn('pdfUploadBtn', false, '📤 PDFs hochladen &amp; abgleichen');
-  }
-});
+    setBtn('pdfUploadBtn', true, '<span class="spinner"></span> Verarbeite PDFs…');
+    clearAlert('pdfUploadAlert');
+    document.getElementById('pdfResultCard').style.display = 'none';
 
-function renderPdfResults(results) {
-  const container = document.getElementById('pdfResultContent');
-  const rows = results.map(r => {
-    if (r.error) {
-      return `<tr><td>${esc(r.file)}</td><td colspan="5" style="color:var(--danger)">${esc(r.error)}</td></tr>`;
+    const form = new FormData();
+    for (const f of fileInput.files) form.append('pdfs', f);
+
+    try {
+      const res  = await fetch('/api/admin/upload-pdf', { method: 'POST', body: form });
+      const data = await res.json();
+      if (res.ok) {
+        showAlert('pdfUploadAlert', `✅ ${data.inserted} neue Zahlung(en) importiert, ${data.matched} zugeordnet.`, 'success');
+        const resultCard = document.getElementById('pdfResultCard');
+        resultCard.style.display = 'block';
+        document.getElementById('pdfResultContent').innerHTML =
+          `<p>Zeilen gesamt: <strong>${data.total}</strong></p>` +
+          `<p>Davon Abiball-Referenzen erkannt: <strong>${data.abiballs ?? data.matched}</strong></p>`;
+        loadPayments();
+        loadStats();
+        loadOrders();
+        loadDashUnpaid();
+      } else {
+        showAlert('pdfUploadAlert', data.error || 'Fehler beim Verarbeiten.');
+      }
+    } catch {
+      showAlert('pdfUploadAlert', 'Verbindungsfehler.');
+    } finally {
+      setBtn('pdfUploadBtn', false, '📤 PDFs hochladen &amp; abgleichen');
     }
-    let statusBadge;
-    if (r.markedPaid)       statusBadge = '<span class="badge badge-success">✓ Als bezahlt markiert</span>';
-    else if (r.alreadyPaid) statusBadge = '<span class="badge badge-warning">Bereits bezahlt</span>';
-    else if (r.personName)  statusBadge = '<span class="badge badge-danger">Betrag stimmt nicht</span>';
-    else                    statusBadge = '<span class="badge badge-muted">Person nicht gefunden</span>';
-
-    return `<tr>
-      <td style="font-size:.82rem">${esc(r.file)}</td>
-      <td><code>${esc(r.reference)}</code></td>
-      <td>${r.personName ? esc(r.personName) : '<span style="color:var(--muted)">–</span>'}</td>
-      <td>${r.amount != null ? fmt(r.amount) : '–'}</td>
-      <td>${r.expectedAmount != null ? fmt(r.expectedAmount) : '–'}</td>
-      <td>${statusBadge}</td>
-    </tr>`;
-  }).join('');
-
-  container.innerHTML = `
-    <div style="overflow-x:auto">
-      <table>
-        <thead>
-          <tr><th>Datei</th><th>Referenz</th><th>Person</th><th>Gefundener Betrag</th><th>Erwarteter Betrag</th><th>Ergebnis</th></tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-  `;
+  });
 }
 
 // ── CSV hochladen ─────────────────────────────────────────────────────────────
-document.getElementById('csvUploadBtn').addEventListener('click', async () => {
-  const fileInput = document.getElementById('statementFile');
-  if (!fileInput.files.length) {
-    showAlert('csvUploadAlert', 'Bitte eine CSV-Datei auswählen.', 'warning');
-    return;
-  }
+function setupCsvUpload() {
+  document.getElementById('csvUploadBtn')?.addEventListener('click', async () => {
+    const fileInput = document.getElementById('statementFile');
+    if (!fileInput.files.length) {
+      showAlert('csvUploadAlert', 'Bitte eine Datei auswählen.', 'warning');
+      return;
+    }
 
-  setBtn('csvUploadBtn', true, '<span class="spinner"></span> Verarbeite…');
-  clearAlert('csvUploadAlert');
+    setBtn('csvUploadBtn', true, '<span class="spinner"></span> Verarbeite…');
+    clearAlert('csvUploadAlert');
 
-  const form = new FormData();
-  form.append('statement', fileInput.files[0]);
+    const form = new FormData();
+    form.append('statement', fileInput.files[0]);
 
-  try {
-    const res  = await fetch('/api/payments/upload', { method: 'POST', body: form });
-    const data = await res.json();
+    try {
+      const res  = await fetch('/api/admin/upload-statement', { method: 'POST', body: form });
+      const data = await res.json();
+      if (res.ok) {
+        showAlert('csvUploadAlert', `✅ ${data.inserted} neue Zahlung(en), ${data.matched} zugeordnet.`, 'success');
+        loadPayments();
+        loadStats();
+        loadOrders();
+        loadDashUnpaid();
+      } else {
+        showAlert('csvUploadAlert', data.error || 'Fehler beim Verarbeiten.');
+      }
+    } catch {
+      showAlert('csvUploadAlert', 'Verbindungsfehler.');
+    } finally {
+      setBtn('csvUploadBtn', false, 'Hochladen &amp; prüfen');
+    }
+  });
+}
 
-    if (!res.ok) { showAlert('csvUploadAlert', data.error || 'Fehler.'); return; }
-
-    const matched = data.results.filter(r => r.matched).length;
-    showAlert('csvUploadAlert',
-      `✅ ${data.processed} Buchungen eingelesen, ${matched} Zahlungen zugeordnet.`,
-      'success'
-    );
-    fileInput.value = '';
-    loadPayments();
-    loadStats();
-  } catch {
-    showAlert('csvUploadAlert', 'Verbindungsfehler.');
-  } finally {
-    setBtn('csvUploadBtn', false, 'Hochladen &amp; prüfen');
-  }
-});
-
-// ── Einstellungen laden / speichern ───────────────────────────────────────────
+// ── Einstellungen ─────────────────────────────────────────────────────────────
 async function loadSettings() {
   try {
     const res  = await fetch('/api/admin/settings');
+    if (res.status === 401) return;
     const data = await res.json();
-    applySettingsToForm(data.settings || {});
-    updateSettingsPreview(data.settings || {});
-    if (data.envStatus) renderEnvStatus(data.envStatus);
-    // Update page branding from event_name setting
-    const eventName = (data.settings || {}).event_name;
-    if (eventName) {
-      document.title = `${eventName} – Admin`;
-      const navH1 = document.querySelector('.topbar h1');
-      if (navH1) navH1.textContent = `🎓 ${eventName} – Admin`;
+    const s    = data.settings || {};
+
+    document.getElementById('s-event-name').value     = s.event_name     || '';
+    document.getElementById('s-event-date').value     = s.event_date     || '';
+    document.getElementById('s-event-location').value = s.event_location || '';
+    document.getElementById('s-ticket-price').value   = s.ticket_price   || '';
+    document.getElementById('s-bank-name').value      = s.bank_recipient || '';
+    document.getElementById('s-bank-iban').value      = s.bank_iban      || '';
+    document.getElementById('s-bank-bic').value       = s.bank_bic       || '';
+
+    document.getElementById('settingsPreview').textContent = JSON.stringify(s, null, 2);
+
+    const envDiv = document.getElementById('envStatusContent');
+    if (data.env) {
+      envDiv.innerHTML = Object.entries(data.env).map(([k, v]) =>
+        `<div style="display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid var(--border)">
+          <code style="font-size:.85rem">${esc(k)}</code>
+          <span class="badge ${v ? 'badge-success' : 'badge-muted'}">${v ? '✅ Gesetzt' : '❌ Nicht gesetzt'}</span>
+        </div>`
+      ).join('');
     }
   } catch {
     // silent
   }
 }
 
-function applySettingsToForm(s) {
-  const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
-  set('s-event-name',     s.event_name);
-  set('s-event-date',     s.event_date);
-  set('s-event-location', s.event_location);
-  set('s-ticket-price',   s.ticket_price);
-  set('s-bank-name',      s.bank_name);
-  set('s-bank-iban',      s.bank_iban);
-  set('s-bank-bic',       s.bank_bic);
-}
-
-function updateSettingsPreview(s) {
-  document.getElementById('settingsPreview').textContent = JSON.stringify(s, null, 2);
-}
-
-function renderEnvStatus(env) {
-  const el = document.getElementById('envStatusContent');
-  if (!el) return;
-  const rows = Object.entries(env).map(([k, v]) => {
-    const isSet = v !== '';
-    return `<tr>
-      <td><code>${esc(k)}</code></td>
-      <td>${isSet
-        ? `<span class="badge badge-success">✓ gesetzt</span> <span style="font-size:.85rem;color:var(--muted)">${esc(v)}</span>`
-        : '<span class="badge badge-muted">nicht gesetzt</span>'}</td>
-    </tr>`;
-  }).join('');
-  el.innerHTML = `<div style="overflow-x:auto"><table>
-    <thead><tr><th>Variable</th><th>Wert / Status</th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table></div>`;
-}
-
-async function saveSettings(keys, alertId, btnId, btnLabel) {
-  const body = {};
-  keys.forEach(([domId, key]) => {
-    const el = document.getElementById(domId);
-    if (el) body[key] = el.value.trim();
+function setupSettingsSave() {
+  document.getElementById('saveEventBtn')?.addEventListener('click', async () => {
+    clearAlert('settingsEventAlert');
+    const body = {
+      event_name:     document.getElementById('s-event-name').value,
+      event_date:     document.getElementById('s-event-date').value,
+      event_location: document.getElementById('s-event-location').value,
+      ticket_price:   parseFloat(document.getElementById('s-ticket-price').value) || null,
+    };
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body),
+      });
+      if (res.ok) showAlert('settingsEventAlert', '✅ Gespeichert.', 'success');
+      else        showAlert('settingsEventAlert', 'Fehler beim Speichern.');
+      loadSettings();
+    } catch {
+      showAlert('settingsEventAlert', 'Verbindungsfehler.');
+    }
   });
 
-  setBtn(btnId, true, '<span class="spinner"></span> Speichern…');
-  clearAlert(alertId);
-
-  try {
-    const res  = await fetch('/api/admin/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (!res.ok) { showAlert(alertId, data.error || 'Fehler.'); return; }
-    showAlert(alertId, '✅ Gespeichert.', 'success');
-    updateSettingsPreview(data.settings || {});
-  } catch {
-    showAlert(alertId, 'Verbindungsfehler.');
-  } finally {
-    setBtn(btnId, false, btnLabel);
-  }
+  document.getElementById('saveBankBtn')?.addEventListener('click', async () => {
+    clearAlert('settingsBankAlert');
+    const body = {
+      bank_recipient: document.getElementById('s-bank-name').value,
+      bank_iban:      document.getElementById('s-bank-iban').value,
+      bank_bic:       document.getElementById('s-bank-bic').value,
+    };
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body),
+      });
+      if (res.ok) showAlert('settingsBankAlert', '✅ Gespeichert.', 'success');
+      else        showAlert('settingsBankAlert', 'Fehler beim Speichern.');
+      loadSettings();
+    } catch {
+      showAlert('settingsBankAlert', 'Verbindungsfehler.');
+    }
+  });
 }
-
-document.getElementById('saveEventBtn').addEventListener('click', () =>
-  saveSettings(
-    [
-      ['s-event-name',     'event_name'],
-      ['s-event-date',     'event_date'],
-      ['s-event-location', 'event_location'],
-      ['s-ticket-price',   'ticket_price'],
-    ],
-    'settingsEventAlert', 'saveEventBtn', '💾 Veranstaltungsdaten speichern'
-  )
-);
-
-document.getElementById('saveBankBtn').addEventListener('click', () =>
-  saveSettings(
-    [
-      ['s-bank-name', 'bank_name'],
-      ['s-bank-iban', 'bank_iban'],
-      ['s-bank-bic',  'bank_bic'],
-    ],
-    'settingsBankAlert', 'saveBankBtn', '💾 Bankdaten speichern'
-  )
-);
-
-// ── Start ─────────────────────────────────────────────────────────────────────
-loadStats();
-loadDashUnpaid();
-loadPersons();
-loadPayments();
-loadOrders();
-loadSettings();
