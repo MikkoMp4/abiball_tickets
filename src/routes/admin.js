@@ -188,6 +188,8 @@ router.post('/upload-pdf', pdfUpload.array('pdfs', 20), async (req, res) => {
             .run(person.id, tx.amount, ref, person.name);
           affectedPersonIds.add(person.id);
         }
+        // Auch wenn Payment schon existiert: Status neu berechnen
+        affectedPersonIds.add(person.id);
       }
       allResults.push({ file: file.originalname, reference: ref, amount: tx.amount, personName: person?.name || null, matched: !!person });
     }
@@ -212,10 +214,8 @@ router.post('/upload-pdf', pdfUpload.array('pdfs', 20), async (req, res) => {
 router.post('/upload-statement', statementUpload.single('statement'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen' });
 
-  const db   = getDb();
-  const s    = getSettings();
-  const ticketPrice = parseFloat(s.ticket_price || '45');
-  const ext  = path.extname(req.file.originalname).toLowerCase();
+  const db  = getDb();
+  const ext = path.extname(req.file.originalname).toLowerCase();
   const rows = [];
 
   try {
@@ -245,7 +245,7 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
         const clean = (idx) => (idx !== -1 && cols[idx] !== undefined) ? cols[idx].replace(/^"|"$/g, '').trim() : '';
         const rawAmt = clean(amtCol).replace(/\u20ac/g, '').replace(/\./g, '').replace(',', '.').replace(/\s+/g, '');
         const amount = parseFloat(rawAmt);
-        if (isNaN(amount)) continue;
+        if (isNaN(amount) || amount <= 0) continue;
 
         rows.push({
           booking_date: clean(dateCol) || new Date().toISOString().slice(0, 10),
@@ -287,7 +287,7 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
         const get = (idx) => idx !== -1 ? String(row.getCell(idx).value || '').trim() : '';
         const rawAmt = get(amtCol).replace(/\u20ac/g, '').replace(/\./g, '').replace(',', '.').replace(/\s+/g, '');
         const amount = parseFloat(rawAmt);
-        if (isNaN(amount)) return;
+        if (isNaN(amount) || amount <= 0) return;
         rows.push({
           booking_date: get(dateCol) || new Date().toISOString().slice(0, 10),
           sender_name:  get(nameCol) || 'Unbekannt',
@@ -305,6 +305,11 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
   const allResults = [];
   const affectedPersonIds = new Set();
 
+  // Verwende INSERT OR IGNORE damit Duplikate den Request nicht zum Absturz bringen
+  const insertPayment = db.prepare(
+    'INSERT OR IGNORE INTO payments (person_id, amount_eur, reference, sender_name, booking_date, matched) VALUES (?, ?, ?, ?, ?, 1)'
+  );
+
   for (const row of rows) {
     const ref    = (row.reference || '').toUpperCase();
     const code   = extractAbiballCode(ref);
@@ -312,12 +317,10 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
     const order  = person ? db.prepare('SELECT * FROM orders WHERE person_id = ? AND submitted = 1 ORDER BY id DESC LIMIT 1').get(person.id) : null;
 
     if (person && order && !isNaN(row.amount_eur)) {
-      const existing = db.prepare('SELECT id FROM payments WHERE reference = ?').get(ref);
-      if (!existing) {
-        db.prepare("INSERT INTO payments (person_id, amount_eur, reference, sender_name, booking_date, matched) VALUES (?, ?, ?, ?, ?, 1)")
-          .run(person.id, row.amount_eur, ref, row.sender_name || person.name, row.booking_date);
-        affectedPersonIds.add(person.id);
-      }
+      insertPayment.run(person.id, row.amount_eur, ref, row.sender_name || person.name, row.booking_date);
+      // Immer in affectedPersonIds eintragen – auch wenn Payment schon existierte –
+      // damit recalcPaymentStatus auf jeden Fall läuft und paid/ticket_paid korrekt gesetzt wird.
+      affectedPersonIds.add(person.id);
     }
     allResults.push({
       reference:  ref,
