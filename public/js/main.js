@@ -11,9 +11,9 @@ fetch('/api/tickets/config')
     if (!cfg.event) return;
     document.title = `${cfg.event} – Ticketkauf`;
     const navH1 = document.querySelector('.topbar h1');
-    if (navH1) navH1.textContent = `🎓 ${cfg.event}`;
+    if (navH1) navH1.textContent = `Abiball 2026 MTG`;
     const heroH1 = document.querySelector('.hero h1');
-    if (heroH1) heroH1.textContent = `Willkommen zum ${cfg.event} 🎉`;
+    if (heroH1) heroH1.textContent = `Willkommen zum Ticketverkauf von unserem ${cfg.event}`;
   })
   .catch(() => {});
 
