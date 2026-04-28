@@ -96,7 +96,6 @@ function recalcPaymentStatus(db, personId) {
       return { nowFullyPaid: !wasPaid, order: { ...order, paid: 1 } };
     } else if (anyPaid) {
       db.prepare('UPDATE orders SET paid = 2, paid_amount = ? WHERE id = ?').run(paidAmount, order.id);
-      // ticket_paid für einzelne Split-Tickets setzen
       for (const t of tickets) {
         db.prepare('UPDATE order_tickets SET ticket_paid = ? WHERE id = ?').run(t.split_paid_at ? 1 : 0, t.id);
       }
@@ -114,14 +113,12 @@ function recalcPaymentStatus(db, personId) {
   ).get(personId);
 
   if (total_paid >= order.total_eur - 0.01) {
-    // Vollständig bezahlt: alle Tickets als paid markieren
     db.prepare(
       "UPDATE orders SET paid = 1, paid_amount = ?, paid_at = COALESCE(paid_at, datetime('now')) WHERE id = ?"
     ).run(total_paid, order.id);
     db.prepare('UPDATE order_tickets SET ticket_paid = 1 WHERE order_id = ?').run(order.id);
     return { nowFullyPaid: !wasPaid, order: { ...order, paid: 1, paid_amount: total_paid } };
   } else if (total_paid > 0) {
-    // Teilzahlung: erste N Tickets als paid markieren die durch den Betrag gedeckt sind
     db.prepare('UPDATE orders SET paid = 2, paid_amount = ? WHERE id = ?').run(total_paid, order.id);
     const tickets = db.prepare('SELECT * FROM order_tickets WHERE order_id = ? ORDER BY id ASC').all(order.id);
     let remaining = total_paid;
@@ -150,7 +147,7 @@ router.post('/upload', upload.single('statement'), async (req, res) => {
   const allPersons = db.prepare('SELECT * FROM persons').all();
   const results    = [];
   const affectedPersonIds = new Set();
-  const splitTicketsNowPaid = [];  // { person, order, ticket } die jetzt bezahlt sind
+  const splitTicketsNowPaid = [];
 
   const insertPayment = db.prepare(
     'INSERT OR IGNORE INTO payments (person_id, amount_eur, reference, sender_name, booking_date, matched) VALUES (@personId, @amount, @reference, @senderName, @date, @matched)'
@@ -160,7 +157,6 @@ router.post('/upload', upload.single('statement'), async (req, res) => {
     for (const entry of entries) {
       const refUpper = entry.reference.toUpperCase();
 
-      // 1. Versuche Split-Match (CODE-N)
       let matchedPerson = null;
       let splitTicketId = null;
       let splitTicketNum = null;
@@ -176,7 +172,6 @@ router.post('/upload', upload.single('statement'), async (req, res) => {
         }
       }
 
-      // Falls Split-Match: Ticket-ID aus split_ref ermitteln
       if (matchedPerson && splitTicketNum !== null) {
         const order = db.prepare(
           'SELECT * FROM orders WHERE person_id = ? AND submitted = 1 ORDER BY id DESC LIMIT 1'
@@ -195,7 +190,6 @@ router.post('/upload', upload.single('statement'), async (req, res) => {
         }
       }
 
-      // 2. Falls kein Split-Match, versuche normalen Code-Match
       if (!matchedPerson) {
         matchedPerson = allPersons.find(p => refUpper.includes(p.code.toUpperCase())) || null;
       }
@@ -221,7 +215,6 @@ router.post('/upload', upload.single('statement'), async (req, res) => {
     }
   })();
 
-  // Zahlungsstatus neu berechnen
   const newlyFullyPaid = [];
   for (const personId of affectedPersonIds) {
     const { nowFullyPaid, order } = recalcPaymentStatus(db, personId);
@@ -230,7 +223,6 @@ router.post('/upload', upload.single('statement'), async (req, res) => {
     }
   }
 
-  // E-Mails für komplett bezahlte Bestellungen
   const emailResults = [];
   for (const { person, order } of newlyFullyPaid) {
     try {
@@ -240,7 +232,6 @@ router.post('/upload', upload.single('statement'), async (req, res) => {
     }
   }
 
-  // E-Mails für einzelne Split-Tickets die jetzt bezahlt sind (aber Gesamtbestellung noch offen)
   for (const { person, order, ticket } of splitTicketsNowPaid) {
     const wasFullyHandled = newlyFullyPaid.some(e => e.order.id === order.id);
     if (!wasFullyHandled) {
@@ -272,8 +263,44 @@ router.get('/', (req, res) => {
   `).all() });
 });
 
+/**
+ * PATCH /api/payments/:id
+ * Ordnet eine Zahlung manuell einer Person zu und berechnet den Bestellstatus neu.
+ * Body: { personId: number }
+ */
+router.patch('/:id', (req, res) => {
+  const db      = getDb();
+  const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(req.params.id);
+  if (!payment) return res.status(404).json({ error: 'Zahlung nicht gefunden' });
+
+  const { personId } = req.body;
+  if (!personId) return res.status(400).json({ error: 'personId fehlt' });
+
+  const person = db.prepare('SELECT * FROM persons WHERE id = ?').get(personId);
+  if (!person) return res.status(404).json({ error: 'Person nicht gefunden' });
+
+  // Alten person_id merken für Rückberechnung
+  const oldPersonId = payment.person_id;
+
+  db.prepare('UPDATE payments SET person_id = ?, matched = 1 WHERE id = ?').run(personId, payment.id);
+
+  // Status für neue Person neu berechnen
+  const { nowFullyPaid, order } = recalcPaymentStatus(db, personId);
+
+  // Falls Payment vorher einer anderen Person zugeordnet war, auch deren Status neu berechnen
+  if (oldPersonId && oldPersonId !== personId) {
+    recalcPaymentStatus(db, oldPersonId);
+  }
+
+  res.json({
+    ok: true,
+    personName:    person.name,
+    nowFullyPaid,
+    orderPaidStatus: order ? order.paid : null,
+  });
+});
+
 // POST /api/payments/:id/send
-// Sendet NUR Tickets die ticket_paid=1 haben (bei Teilzahlung nicht alle blind senden)
 router.post('/:id/send', async (req, res) => {
   const db      = getDb();
   const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(req.params.id);
@@ -284,7 +311,6 @@ router.post('/:id/send', async (req, res) => {
   const order  = db.prepare('SELECT * FROM orders WHERE person_id = ? ORDER BY id DESC LIMIT 1').get(payment.person_id);
   if (!order)  return res.status(400).json({ error: 'Keine Bestellung gefunden' });
 
-  // Nur bereits bezahlte Tickets senden
   const paidTickets = db.prepare('SELECT * FROM order_tickets WHERE order_id = ? AND ticket_paid = 1').all(order.id);
   if (!paidTickets.length) return res.status(400).json({ error: 'Keine bezahlten Tickets vorhanden. Bitte zuerst Zahlung zuordnen.' });
   if (!paidTickets.some(t => (t.ticket_email || '').trim()))
@@ -303,7 +329,6 @@ router.post('/:id/send', async (req, res) => {
       sentTo.push(toEmail);
     }
     db.prepare('UPDATE payments SET qr_sent = 1 WHERE id = ?').run(payment.id);
-    // Order als vollständig bezahlt markieren nur wenn ALLE Tickets paid sind
     const allTickets = db.prepare('SELECT COUNT(*) AS n FROM order_tickets WHERE order_id = ?').get(order.id);
     if (paidTickets.length >= allTickets.n) {
       db.prepare("UPDATE orders SET paid = 1, paid_amount = total_eur, paid_at = COALESCE(paid_at, datetime('now')) WHERE id = ?").run(order.id);
