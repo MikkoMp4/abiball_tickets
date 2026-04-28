@@ -44,7 +44,7 @@ async function init() {
     if (config.event) {
       document.title = `${config.event} – Ticketbestellung`;
       const navH1 = document.querySelector('.topbar h1');
-      if (navH1) navH1.textContent = `🎓 ${config.event}`;
+      if (navH1) navH1.textContent = config.event;
     }
 
     const verifyRes  = await fetch('/api/codes/verify', {
@@ -136,9 +136,9 @@ function renderManageTabs(data) {
 
   paymentCard.innerHTML = `
     <div class="manage-tabs">
-      <button class="tab-btn active" data-tab="payment">💳 Zahlung</button>
-      <button class="tab-btn" data-tab="tickets">🎫 Meine QR-Codes</button>
-      <button class="tab-btn" data-tab="edit">✏️ Angaben ändern</button>
+      <button class="tab-btn active" data-tab="payment">Zahlung</button>
+      <button class="tab-btn" data-tab="tickets">Meine QR-Codes</button>
+      <button class="tab-btn" data-tab="edit">Angaben ändern</button>
     </div>
     <div class="tab-content" id="tab-payment"></div>
     <div class="tab-content" id="tab-tickets" style="display:none"></div>
@@ -184,7 +184,7 @@ function renderTabPayment(data) {
       <div style="margin:1rem 0;padding:.75rem 1rem;background:#f0f7ff;border-radius:8px;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
         <input type="checkbox" id="splitToggle" style="width:18px;height:18px;cursor:pointer" ${order.split_payment ? 'checked' : ''}>
         <label for="splitToggle" style="cursor:pointer;margin:0;font-weight:500">
-          💳 <strong>Separat zahlen</strong>
+          <strong>Separat zahlen</strong>
           <span style="font-weight:400;font-size:.85rem;color:#555"> – jede Person überweist ihr Ticket einzeln</span>
         </label>
         <span id="splitSpinner" style="display:none;font-size:.85rem;color:#888">Lädt…</span>
@@ -213,7 +213,7 @@ function renderPaymentDetails(data, displayAmount) {
   const order = data.order;
 
   if (order.split_payment) {
-    let html = `<p style="margin-bottom:.75rem"><strong>💳 Separat zahlen – jede Person überweist ihr Ticket einzeln:</strong></p>`;
+    let html = `<p style="margin-bottom:.75rem"><strong>Separat zahlen – jede Person überweist ihr Ticket einzeln:</strong></p>`;
     data.tickets.forEach((t, i) => {
       if (!t.split_ref) return;
       const isPaid = !!t.ticket_paid;
@@ -303,7 +303,7 @@ function renderTabQrCodes(data) {
 
   // Ticket-Tabs (ein Tab pro Ticket)
   const tabBtns = data.tickets.map((t, i) =>
-    `<button class="qr-tab-btn${i === 0 ? ' active' : ''}" data-qrtab="${i}">🎫 Ticket ${i + 1}</button>`
+    `<button class="qr-tab-btn${i === 0 ? ' active' : ''}" data-qrtab="${i}">Ticket ${i + 1}</button>`
   ).join('');
 
   const panels = data.tickets.map((t, i) => {
@@ -319,8 +319,8 @@ function renderTabQrCodes(data) {
             <strong style="font-size:1.05rem">Ticket ${i + 1} – ${esc(t.ticket_name)}</strong>
             ${isPaid ? '<span class="paid-chip">✓ Bezahlt</span>' : '<span class="pending-chip">Ausstehend</span>'}
           </div>
-          <div style="margin-top:.35rem;color:#555;font-size:.9rem">📧 ${esc(t.ticket_email || '–')}</div>
-          ${t.split_ref ? `<div style="margin-top:.2rem;font-size:.82rem;color:#777">🔖 ${esc(t.split_ref)}</div>` : ''}
+          <div style="margin-top:.35rem;color:#555;font-size:.9rem">${esc(t.ticket_email || '–')}</div>
+          ${t.split_ref ? `<div style="margin-top:.2rem;font-size:.82rem;color:#777">Referenz: <code>${esc(t.split_ref)}</code></div>` : ''}
           ${qrHtml}
         </div>
       </div>
@@ -354,8 +354,8 @@ function renderTabEdit(data) {
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem">
       <h3 style="margin:0">Ticket-Angaben</h3>
       <div style="display:flex;gap:.5rem;flex-wrap:wrap">
-        ${canAdd ? `<button id="addTicketBtn" class="btn btn-secondary" style="min-width:140px">➕ Ticket hinzufügen</button>` : ''}
-        <button id="toggleEditBtn" class="btn btn-primary" style="min-width:160px">✏️ Angaben ändern</button>
+        ${canAdd ? `<button id="addTicketBtn" class="btn btn-secondary" style="min-width:140px">Ticket hinzufügen</button>` : ''}
+        <button id="toggleEditBtn" class="btn btn-primary" style="min-width:160px">Angaben ändern</button>
       </div>
     </div>
     ${canAdd ? `
@@ -370,7 +370,7 @@ function renderTabEdit(data) {
           <input id="addTicketEmail" type="email" placeholder="name@beispiel.de" autocomplete="email">
         </div>
         <div style="display:flex;gap:.5rem;margin-top:.5rem">
-          <button id="addTicketSaveBtn" class="btn btn-primary">✓ Hinzufügen</button>
+          <button id="addTicketSaveBtn" class="btn btn-primary">Hinzufügen</button>
           <button id="addTicketCancelBtn" class="btn btn-secondary">Abbrechen</button>
         </div>
         <div id="addTicketFeedback" style="margin-top:.5rem"></div>
@@ -386,7 +386,7 @@ function renderTabEdit(data) {
     const editing = btn.dataset.editing === 'true';
     renderTicketList(currentTickets, !editing);
     btn.dataset.editing = String(!editing);
-    btn.textContent = !editing ? '✕ Abbrechen' : '✏️ Angaben ändern';
+    btn.textContent = !editing ? 'Abbrechen' : 'Angaben ändern';
   });
 
   if (canAdd) {
@@ -423,7 +423,7 @@ async function addTicket() {
   }
 
   saveBtn.disabled    = true;
-  saveBtn.textContent = 'Hinzufüge…';
+  saveBtn.textContent = 'Lädt…';
   feedback.innerHTML  = '';
 
   try {
@@ -448,13 +448,13 @@ async function addTicket() {
     document.getElementById('addTicketBtn').style.display  = '';
 
     renderTicketList(currentTickets, false);
-    showAlert(document.getElementById('manageAlertBox'), '✓ Ticket erfolgreich hinzugefügt.', 'success');
+    showAlert(document.getElementById('manageAlertBox'), 'Ticket erfolgreich hinzugefügt.', 'success');
 
   } catch {
     feedback.innerHTML = '<span style="color:red">Verbindungsfehler.</span>';
   } finally {
     saveBtn.disabled    = false;
-    saveBtn.textContent = '✓ Hinzufügen';
+    saveBtn.textContent = 'Hinzufügen';
   }
 }
 
@@ -473,7 +473,7 @@ function renderTicketList(tickets, editMode) {
       div.innerHTML = `
         <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem">
           <strong>Ticket ${i + 1}</strong>
-          ${!currentOrder.paid ? `<button class="btn btn-danger delete-ticket-btn" style="padding:.25rem .75rem;font-size:.85rem" title="Ticket löschen">🗑 Löschen</button>` : ''}
+          ${!currentOrder.paid ? `<button class="btn btn-danger delete-ticket-btn" style="padding:.25rem .75rem;font-size:.85rem" title="Ticket löschen">Löschen</button>` : ''}
         </div>
         <div class="form-group" style="margin-top:.5rem">
           <label>Name</label>
@@ -484,7 +484,7 @@ function renderTicketList(tickets, editMode) {
           <input class="edit-email" type="email" value="${esc(ticket.ticket_email || '')}" required>
         </div>
         <div style="display:flex;gap:.5rem;margin-top:.5rem;flex-wrap:wrap">
-          <button class="btn btn-primary save-ticket-btn" style="min-width:100px">✓ Speichern</button>
+          <button class="btn btn-primary save-ticket-btn" style="min-width:100px">Speichern</button>
         </div>
         <div class="ticket-feedback" style="margin-top:.5rem"></div>
       `;
@@ -495,9 +495,9 @@ function renderTicketList(tickets, editMode) {
       div.innerHTML = `
         <strong>Ticket ${i + 1}</strong>
         <div style="margin-top:.4rem;color:#555">
-          <div>👤 ${esc(ticket.ticket_name)}</div>
-          <div>📧 ${esc(ticket.ticket_email || '–')}</div>
-          ${ticket.split_ref ? `<div style="margin-top:.25rem;font-size:.85rem">🔖 Referenz: <code>${esc(ticket.split_ref)}</code></div>` : ''}
+          <div>${esc(ticket.ticket_name)}</div>
+          <div>${esc(ticket.ticket_email || '–')}</div>
+          ${ticket.split_ref ? `<div style="margin-top:.25rem;font-size:.85rem">Referenz: <code>${esc(ticket.split_ref)}</code></div>` : ''}
         </div>
       `;
     }
@@ -527,7 +527,7 @@ async function confirmDeleteTicket(ticket, index) {
     const data = await res.json();
 
     if (res.status === 409 && data.error === 'paid_order') {
-      showAlert(manageAlert, '⛔ Diese Bestellung wurde bereits bezahlt. Bitte wende dich an das Orga-Team.', 'danger');
+      showAlert(manageAlert, 'Diese Bestellung wurde bereits bezahlt. Bitte wende dich an das Orga-Team.', 'danger');
       return;
     }
     if (res.status === 409 && data.error === 'last_ticket') {
@@ -540,7 +540,7 @@ async function confirmDeleteTicket(ticket, index) {
     currentOrder.total_eur = data.newTotalEur;
 
     renderTicketList(currentTickets, true);
-    showAlert(manageAlert, '✓ Ticket erfolgreich gelöscht.', 'success');
+    showAlert(manageAlert, 'Ticket erfolgreich gelöscht.', 'success');
 
   } catch { showAlert(manageAlert, 'Verbindungsfehler beim Löschen.', 'danger'); }
 }
@@ -578,17 +578,17 @@ async function saveTicket(div, ticket) {
     feedback.innerHTML  = '<span style="color:green">✓ Gespeichert</span>';
 
     const manageAlert = document.getElementById('manageAlertBox');
-    if (data.emailChanged && data.paid) {
+    if (data.paid && (data.nameChanged || data.emailChanged)) {
       if (data.emailResent) {
-        showAlert(manageAlert, '📧 E-Mail-Adresse geändert – ein aktualisiertes Ticket wurde automatisch an die neue Adresse gesendet.', 'success');
+        showAlert(manageAlert, '✅ Angaben geändert – ein aktualisiertes Ticket wurde automatisch an die hinterlegte E-Mail-Adresse gesendet.', 'success');
       } else {
-        showAlert(manageAlert, '⚠️ E-Mail-Adresse geändert, aber Versenden fehlgeschlagen. Bitte Orga-Team kontaktieren.', 'warning');
+        showAlert(manageAlert, '⚠️ Angaben geändert, aber E-Mail-Versand fehlgeschlagen. Bitte Orga-Team kontaktieren.', 'warning');
       }
     }
   } catch { feedback.innerHTML = '<span style="color:red">Verbindungsfehler.</span>'; }
   finally {
     saveBtn.disabled    = false;
-    saveBtn.textContent = '✓ Speichern';
+    saveBtn.textContent = 'Speichern';
   }
 }
 

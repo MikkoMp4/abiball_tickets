@@ -326,15 +326,22 @@ router.patch('/order/:orderId/ticket/:ticketId', async (req, res) => {
   const ticket = db.prepare('SELECT * FROM order_tickets WHERE id = ? AND order_id = ?').get(ticketId, orderId);
   if (!ticket) return res.status(404).json({ error: 'Ticket nicht gefunden' });
 
+  const oldName      = ticket.ticket_name;
   const oldEmail     = ticket.ticket_email;
+  const newName      = ticketName.trim();
   const newEmail     = ticketEmail.trim();
+  const nameChanged  = oldName  !== newName;
   const emailChanged = oldEmail !== newEmail;
+  const anythingChanged = nameChanged || emailChanged;
 
   db.prepare('UPDATE order_tickets SET ticket_name = ?, ticket_email = ? WHERE id = ?')
-    .run(ticketName.trim(), newEmail, ticketId);
+    .run(newName, newEmail, ticketId);
 
+  // Resend ticket email whenever the order is paid AND name or email changed.
+  // The name is embedded in the QR token payload, so a name change invalidates
+  // the old QR code – the recipient needs the freshly generated one.
   let emailResent = false;
-  if (emailChanged && order.paid === 1) {
+  if (anythingChanged && order.paid === 1) {
     try {
       const updatedTicket = db.prepare('SELECT * FROM order_tickets WHERE id = ?').get(ticketId);
       const qrBuffer = await generateQrBufferForTicket(db, updatedTicket, {
@@ -342,7 +349,7 @@ router.patch('/order/:orderId/ticket/:ticketId', async (req, res) => {
       });
       await sendSingleTicketEmail({
         to:         newEmail,
-        personName: ticketName.trim(),
+        personName: newName,
         qrBuffer,
         updated:    true,
       });
@@ -352,7 +359,7 @@ router.patch('/order/:orderId/ticket/:ticketId', async (req, res) => {
     }
   }
 
-  res.json({ success: true, emailChanged, emailResent, paid: order.paid === 1 });
+  res.json({ success: true, nameChanged, emailChanged, emailResent, paid: order.paid === 1 });
 });
 
 // ── DELETE /api/tickets/order/:orderId/ticket/:ticketId ────────────────────────────────
@@ -411,9 +418,6 @@ router.post('/validate', (req, res) => {
   ).get(token);
 
   if (!ticket)            return res.json({ valid: false, reason: 'Unbekanntes Token' });
-  // BUG FIX: paid=2 (Teilzahlung) muss als nicht vollständig bezahlt behandelt werden.
-  // Vorher: !ticket.paid  → war true bei paid=0 aber false bei paid=2, was Teilzahler durchlässt.
-  // Jetzt:  ticket.paid !== 1  → nur vollständig bezahlte Bestellungen kommen rein.
   if (ticket.paid !== 1)  return res.json({ valid: false, reason: 'Noch nicht bezahlt', name: ticket.ticket_name });
 
   res.json({
