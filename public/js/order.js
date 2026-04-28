@@ -33,13 +33,13 @@ function esc(str) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// ── Manage-Mode styles (injected once) ───────────────────────────────────
+// ── Manage-Mode styles ────────────────────────────────────────────────────
 function injectManageStyles() {
   if (document.getElementById('manageStyles')) return;
   const s = document.createElement('style');
   s.id = 'manageStyles';
   s.textContent = `
-    /* Tab bar */
+    /* ── Tab bar ── */
     .m-tabs {
       display: flex;
       gap: .25rem;
@@ -50,7 +50,7 @@ function injectManageStyles() {
     }
     .m-tabs::-webkit-scrollbar { display: none; }
     .m-tab {
-      padding: .55rem 1.1rem;
+      padding: .6rem 1.2rem;
       font-size: .875rem;
       font-weight: 600;
       color: var(--muted);
@@ -68,94 +68,127 @@ function injectManageStyles() {
     .m-pane { display: none; }
     .m-pane.active { display: block; }
 
-    /* Status banners */
+    /* ── Status banners ── */
     .status-paid {
       background: var(--success-bg);
       color: var(--success);
       border-left: 4px solid var(--success);
       border-radius: var(--radius);
-      padding: .85rem 1rem;
+      padding: .9rem 1rem;
       font-weight: 600;
+      font-size: .9rem;
       margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
     }
     .status-partial {
       background: var(--warning-bg);
       color: var(--warning);
       border-left: 4px solid var(--warning);
       border-radius: var(--radius);
-      padding: .85rem 1rem;
+      padding: .9rem 1rem;
+      font-size: .9rem;
       margin-bottom: 1.25rem;
     }
 
-    /* Payment info box */
+    /* ── Payment box ── */
     .pay-box {
       border: 1.5px solid var(--border);
       border-radius: var(--radius);
       overflow: hidden;
       margin-bottom: 1.25rem;
+      box-shadow: var(--shadow-sm);
     }
     .pay-box-header {
       background: var(--primary-light);
-      padding: .6rem 1rem;
-      font-size: .8rem;
+      padding: .65rem 1rem;
+      font-size: .75rem;
       font-weight: 700;
       color: var(--primary-dark);
       text-transform: uppercase;
-      letter-spacing: .04em;
+      letter-spacing: .06em;
+      border-bottom: 1px solid rgba(230,126,34,.15);
     }
     .pay-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: .6rem 1rem;
+      padding: .7rem 1rem;
       border-bottom: 1px solid var(--border);
       font-size: .9rem;
       gap: .5rem;
     }
     .pay-row:last-child { border-bottom: none; }
-    .pay-row-label { color: var(--muted); font-size: .82rem; white-space: nowrap; }
-    .pay-row-value { font-weight: 600; text-align: right; word-break: break-all; }
+    .pay-row-label {
+      color: var(--muted);
+      font-size: .8rem;
+      font-weight: 500;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .pay-row-value {
+      font-weight: 600;
+      text-align: right;
+      word-break: break-all;
+    }
     .pay-row-value code {
       font-family: 'Courier New', monospace;
-      font-size: .85rem;
+      font-size: .83rem;
       background: var(--primary-light);
-      padding: .1rem .4rem;
+      color: var(--primary-dark);
+      padding: .15rem .45rem;
       border-radius: 4px;
     }
     .pay-amount {
       font-family: var(--font-display);
-      font-size: 1.5rem;
+      font-size: 1.6rem;
       font-weight: 800;
       color: var(--primary);
+      line-height: 1;
     }
 
-    /* QR wrapper */
-    .qr-center {
+    /* ── QR block ── */
+    .qr-block {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 1rem 0 .5rem;
-      gap: .5rem;
-    }
-    .qr-center img {
-      width: 180px;
-      height: 180px;
-      border-radius: var(--radius);
+      gap: .6rem;
+      padding: 1.25rem 1rem;
+      background: var(--card-2);
       border: 1.5px solid var(--border);
-      display: block;
+      border-radius: var(--radius);
+      margin-bottom: 1.25rem;
+      box-shadow: var(--shadow-sm);
     }
-    .qr-label {
+    .qr-block img {
+      width: 192px;
+      height: 192px;
+      border-radius: var(--radius-sm);
+      border: 2px solid var(--border);
+      display: block;
+      background: #fff;
+    }
+    .qr-block-label {
       font-size: .78rem;
       color: var(--muted);
       text-align: center;
+      font-weight: 500;
+    }
+    .qr-block-title {
+      font-size: .75rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+      text-transform: uppercase;
+      letter-spacing: .05em;
     }
 
-    /* Split toggle row */
+    /* ── Split toggle ── */
     .split-toggle-row {
       display: flex;
       align-items: center;
       gap: .75rem;
-      padding: .8rem 1rem;
+      padding: .85rem 1rem;
       background: var(--card-2);
       border: 1.5px solid var(--border);
       border-radius: var(--radius);
@@ -163,19 +196,23 @@ function injectManageStyles() {
       flex-wrap: wrap;
     }
     .split-toggle-row input[type=checkbox] {
-      width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary);
+      width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary); flex-shrink: 0;
     }
-    .split-toggle-row label { cursor: pointer; margin: 0; font-weight: 500; }
-    .split-toggle-row .sub { font-size: .82rem; color: var(--muted); }
+    .split-toggle-row label { cursor: pointer; margin: 0; font-weight: 500; font-size: .9rem; }
+    .split-toggle-row .sub { font-size: .8rem; color: var(--muted); }
+    #splitSpinner { font-size: .82rem; color: var(--muted); }
 
-    /* Ticket cards */
+    /* ── Ticket cards ── */
     .t-card {
       background: var(--card-2);
       border: 1.5px solid var(--border);
       border-radius: var(--radius);
-      padding: 1rem;
+      padding: 1rem 1.1rem;
       margin-bottom: .85rem;
+      box-shadow: var(--shadow-sm);
+      transition: box-shadow var(--ease);
     }
+    .t-card:hover { box-shadow: var(--shadow); }
     .t-card-header {
       display: flex;
       align-items: center;
@@ -189,16 +226,16 @@ function injectManageStyles() {
       display: inline-flex;
       align-items: center;
       gap: .25rem;
-      padding: .18rem .65rem;
+      padding: .2rem .7rem;
       border-radius: var(--radius-full);
-      font-size: .75rem;
+      font-size: .73rem;
       font-weight: 700;
       white-space: nowrap;
     }
     .chip-paid    { background: var(--success-bg); color: var(--success); }
     .chip-pending { background: var(--warning-bg); color: var(--warning); }
 
-    /* QR sub-tabs (pill style) */
+    /* ── QR sub-tabs (pill) ── */
     .qr-subtabs {
       display: flex;
       gap: .4rem;
@@ -206,7 +243,7 @@ function injectManageStyles() {
       margin-bottom: 1rem;
     }
     .qr-subtab {
-      padding: .35rem .9rem;
+      padding: .35rem .95rem;
       border-radius: var(--radius-full);
       border: 1.5px solid var(--border);
       background: var(--card-2);
@@ -222,7 +259,7 @@ function injectManageStyles() {
     .qr-subpane { display: none; }
     .qr-subpane.active { display: block; }
 
-    /* Edit-mode form */
+    /* ── Edit form ── */
     .edit-form-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -237,21 +274,30 @@ function injectManageStyles() {
       flex-wrap: wrap;
       align-items: center;
     }
-    .t-meta { font-size: .875rem; color: var(--muted); margin-top: .2rem; }
+    .t-meta {
+      font-size: .875rem;
+      color: var(--muted);
+      margin-top: .2rem;
+      display: flex;
+      align-items: center;
+      gap: .3rem;
+    }
     .t-meta code {
       font-size: .8rem;
       background: var(--primary-light);
+      color: var(--primary-dark);
       padding: .1rem .35rem;
       border-radius: 4px;
     }
 
-    /* Add ticket form */
+    /* ── Add ticket form ── */
     .add-form {
       background: var(--card-2);
       border: 1.5px solid var(--border);
       border-radius: var(--radius);
-      padding: 1rem;
+      padding: 1rem 1.1rem;
       margin-bottom: 1rem;
+      box-shadow: var(--shadow-sm);
     }
     .add-form h4 { font-size: .9rem; font-weight: 700; margin-bottom: .75rem; }
     .section-header {
@@ -268,8 +314,27 @@ function injectManageStyles() {
       font-size: .825rem;
       min-height: 36px;
     }
-    .feedback-ok  { color: var(--success); font-size: .85rem; }
+    .feedback-ok  { color: var(--success); font-size: .85rem; font-weight: 500; }
     .feedback-err { color: var(--danger);  font-size: .85rem; }
+
+    /* ── QR notice (unpaid warning) ── */
+    .qr-notice {
+      background: var(--warning-bg);
+      color: var(--warning);
+      border: 1.5px solid rgba(230,81,0,.2);
+      border-radius: var(--radius);
+      padding: .75rem 1rem;
+      font-size: .85rem;
+      margin-bottom: 1.25rem;
+      font-weight: 500;
+    }
+
+    /* ── Divider ── */
+    .pay-divider {
+      border: none;
+      border-top: 1.5px solid var(--border);
+      margin: 1rem 0;
+    }
   `;
   document.head.appendChild(s);
 }
@@ -303,14 +368,14 @@ async function init() {
 
     if (mode === 'manage' || verifyData.alreadyOrdered) {
       personInfo.innerHTML =
-        `<strong>${esc(person.name)}</strong> &nbsp;|&nbsp; Code: <code>${esc(code)}</code>`;
+        `<strong>${esc(person.name)}</strong>&nbsp; &middot; &nbsp;Code: <code>${esc(code)}</code>`;
       await loadManageMode();
       return;
     }
 
     personInfo.innerHTML =
-      `<strong>${esc(person.name)}</strong> &nbsp;|&nbsp; Zugangscode: <code>${esc(code)}</code>` +
-      ` &nbsp;|&nbsp; Verfügbare Tickets: <strong>${esc(String(person.num_tickets))}</strong>`;
+      `<strong>${esc(person.name)}</strong>&nbsp; &middot; &nbsp;Code: <code>${esc(code)}</code>` +
+      `&nbsp; &middot; &nbsp;Verfügbare Tickets: <strong>${esc(String(person.num_tickets))}</strong>`;
     buildTicketForms(person.num_tickets);
     orderCard.style.display = 'block';
 
@@ -327,8 +392,8 @@ async function loadManageMode() {
 
     if (!res.ok) {
       personInfo.innerHTML =
-        `<strong>${esc(person.name)}</strong> &nbsp;|&nbsp; Zugangscode: <code>${esc(code)}</code>` +
-        ` &nbsp;|&nbsp; Verfügbare Tickets: <strong>${esc(String(person.num_tickets))}</strong>`;
+        `<strong>${esc(person.name)}</strong>&nbsp; &middot; &nbsp;Code: <code>${esc(code)}</code>` +
+        `&nbsp; &middot; &nbsp;Verfügbare Tickets: <strong>${esc(String(person.num_tickets))}</strong>`;
       buildTicketForms(person.num_tickets);
       orderCard.style.display = 'block';
       return;
@@ -387,9 +452,9 @@ function renderPaymentPane(data) {
 
   let statusHtml = '';
   if (fullyPaid) {
-    statusHtml = `<div class="status-paid">✅ Vollständig bezahlt – Tickets wurden per E-Mail verschickt.</div>`;
+    statusHtml = `<div class="status-paid"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Vollständig bezahlt – Tickets wurden per E-Mail verschickt.</div>`;
   } else if (partial) {
-    statusHtml = `<div class="status-partial">⚠️ Teilzahlung erhalten: <strong>${fmt(paidAmount)}</strong> von <strong>${fmt(totalEur)}</strong> – noch ausstehend: <strong>${fmt(remEur)}</strong></div>`;
+    statusHtml = `<div class="status-partial">Teilzahlung erhalten: <strong>${fmt(paidAmount)}</strong> von <strong>${fmt(totalEur)}</strong> – noch ausstehend: <strong>${fmt(remEur)}</strong></div>`;
   }
 
   let splitToggle = '';
@@ -401,7 +466,7 @@ function renderPaymentPane(data) {
           Separat zahlen
           <span class="sub"> – jede Person überweist ihr Ticket einzeln</span>
         </label>
-        <span id="splitSpinner" style="display:none;font-size:.82rem;color:var(--muted)">Lädt…</span>
+        <span id="splitSpinner" style="display:none">Lädt…</span>
       </div>
     `;
   }
@@ -434,9 +499,9 @@ function renderPaymentDetails(data, displayAmount) {
       html += `
         <div class="t-card">
           <div class="t-card-header">
-            <span class="t-card-title">Ticket ${i + 1} – ${esc(t.ticket_name)}</span>
+            <span class="t-card-title">Ticket ${i + 1} &mdash; ${esc(t.ticket_name)}</span>
             ${isPaid
-              ? '<span class="chip chip-paid">✓ Bezahlt</span>'
+              ? '<span class="chip chip-paid">Bezahlt</span>'
               : '<span class="chip chip-pending">Ausstehend</span>'}
           </div>
           ${!isPaid ? `
@@ -452,11 +517,12 @@ function renderPaymentDetails(data, displayAmount) {
               </div>
             </div>
             ${t.splitEpcQr ? `
-              <div class="qr-center">
-                <img src="${t.splitEpcQr}" alt="Zahlung QR Ticket ${i+1}">
-                <span class="qr-label">Mit Banking-App scannen</span>
+              <div class="qr-block">
+                <span class="qr-block-title">GiroCode – Banking-App scannen</span>
+                <img src="${t.splitEpcQr}" alt="Zahlung QR Ticket ${i + 1}" width="192" height="192">
+                <span class="qr-block-label">Referenz: ${esc(t.split_ref)}</span>
               </div>` : ''}
-          ` : `<p class="t-meta" style="margin-top:.25rem">✅ Zahlung eingegangen – Ticket wurde per E-Mail zugestellt.</p>`}
+          ` : `<p class="t-meta" style="margin-top:.25rem">Zahlung eingegangen – Ticket wurde per E-Mail zugestellt.</p>`}
         </div>
       `;
     });
@@ -481,14 +547,15 @@ function renderPaymentDetails(data, displayAmount) {
         <span class="pay-row-value"><code>${esc(data.config.iban)}</code></span>
       </div>
       <div class="pay-row">
-        <span class="pay-row-label">Referenz</span>
+        <span class="pay-row-label">Verwendungszweck</span>
         <span class="pay-row-value"><code>${esc(data.reference)}</code></span>
       </div>
     </div>
     ${data.epcQr ? `
-      <div class="qr-center">
-        <img src="${data.epcQr}" alt="Zahlung QR-Code">
-        <span class="qr-label">Mit Banking-App scannen</span>
+      <div class="qr-block">
+        <span class="qr-block-title">GiroCode – Banking-App scannen</span>
+        <img src="${data.epcQr}" alt="Zahlung QR-Code" width="192" height="192">
+        <span class="qr-block-label">Überweist ${fmt(displayAmount)} mit Referenz ${esc(data.reference)}</span>
       </div>` : ''}
   `;
 }
@@ -541,7 +608,7 @@ function renderQrPane(data) {
 
   let warn = '';
   if (!fullyPaid) {
-    warn = `<div class="alert alert-warning" style="margin-bottom:1.25rem">⚠️ QR-Codes sind erst nach vollständiger Bezahlung gültig und werden dann per E-Mail zugestellt. Die Vorschau hier dient nur zur Kontrolle.</div>`;
+    warn = `<div class="qr-notice">QR-Codes sind erst nach vollständiger Bezahlung gültig und werden dann per E-Mail zugestellt. Die Vorschau hier dient nur zur Kontrolle.</div>`;
   }
 
   const subtabBtns = data.tickets.map((t, i) =>
@@ -551,8 +618,12 @@ function renderQrPane(data) {
   const panels = data.tickets.map((t, i) => {
     const isPaid = fullyPaid || !!t.ticket_paid;
     const qrHtml = t.ticketQrDataUrl
-      ? `<div class="qr-center"><img src="${t.ticketQrDataUrl}" alt="QR-Code Ticket ${i + 1}"><span class="qr-label">${esc(t.ticket_name)}</span></div>`
-      : `<p style="color:var(--muted);font-size:.875rem;margin-top:.75rem">QR-Code wird nach Bezahlung generiert.</p>`;
+      ? `<div class="qr-block" style="margin-top:.75rem">
+           <span class="qr-block-title">Ticket-QR-Code</span>
+           <img src="${t.ticketQrDataUrl}" alt="QR-Code Ticket ${i + 1}" width="192" height="192">
+           <span class="qr-block-label">${esc(t.ticket_name)}</span>
+         </div>`
+      : `<p style="color:var(--muted);font-size:.875rem;margin-top:.75rem">QR-Code wird nach Bezahlung verfügbar.</p>`;
 
     return `
       <div class="qr-subpane${i === 0 ? ' active' : ''}" data-qp="${i}">
@@ -560,11 +631,11 @@ function renderQrPane(data) {
           <div class="t-card-header">
             <span class="t-card-title">${esc(t.ticket_name)}</span>
             ${isPaid
-              ? '<span class="chip chip-paid">✓ Bezahlt</span>'
+              ? '<span class="chip chip-paid">Bezahlt</span>'
               : '<span class="chip chip-pending">Ausstehend</span>'}
           </div>
           <div class="t-meta">${esc(t.ticket_email || '–')}</div>
-          ${t.split_ref ? `<div class="t-meta">Referenz: <code>${esc(t.split_ref)}</code></div>` : ''}
+          ${t.split_ref ? `<div class="t-meta">Referenz:&nbsp;<code>${esc(t.split_ref)}</code></div>` : ''}
           ${qrHtml}
         </div>
       </div>
@@ -707,7 +778,7 @@ function renderTicketList(tickets, editMode) {
         <div class="t-card-header">
           <span class="t-card-title">Ticket ${i + 1}</span>
           ${!currentOrder.paid
-            ? `<button class="btn btn-danger btn-sm delete-ticket-btn">Löschen</button>`
+            ? `<button class="btn btn-danger btn-sm delete-ticket-btn">Entfernen</button>`
             : ''}
         </div>
         <div class="edit-form-row">
@@ -735,7 +806,7 @@ function renderTicketList(tickets, editMode) {
         </div>
         <div class="t-meta">${esc(ticket.ticket_name)}</div>
         <div class="t-meta">${esc(ticket.ticket_email || '–')}</div>
-        ${ticket.split_ref ? `<div class="t-meta">Referenz: <code>${esc(ticket.split_ref)}</code></div>` : ''}
+        ${ticket.split_ref ? `<div class="t-meta">Referenz:&nbsp;<code>${esc(ticket.split_ref)}</code></div>` : ''}
       `;
     }
     container.appendChild(div);
@@ -749,7 +820,7 @@ async function confirmDeleteTicket(ticket, index) {
     showAlert(manageAlert, 'Mindestens ein Ticket muss in der Bestellung verbleiben.', 'warning');
     return;
   }
-  if (!confirm(`Ticket ${index + 1} (${ticket.ticket_name}) wirklich löschen?`)) return;
+  if (!confirm(`Ticket ${index + 1} (${ticket.ticket_name}) wirklich entfernen?`)) return;
 
   try {
     const res = await fetch(
@@ -770,7 +841,7 @@ async function confirmDeleteTicket(ticket, index) {
     currentTickets = currentTickets.filter(t => t.id !== ticket.id);
     currentOrder.total_eur = data.newTotalEur;
     renderTicketList(currentTickets, true);
-    showAlert(manageAlert, 'Ticket erfolgreich gelöscht.', 'success');
+    showAlert(manageAlert, 'Ticket erfolgreich entfernt.', 'success');
   } catch { showAlert(manageAlert, 'Verbindungsfehler.', 'danger'); }
 }
 
@@ -803,14 +874,14 @@ async function saveTicket(div, ticket) {
 
     ticket.ticket_name  = ticketName;
     ticket.ticket_email = ticketEmail;
-    feedback.innerHTML  = '<span class="feedback-ok">✓ Gespeichert</span>';
+    feedback.innerHTML  = '<span class="feedback-ok">Gespeichert</span>';
 
     const manageAlert = document.getElementById('manageAlertBox');
     if (data.paid && (data.nameChanged || data.emailChanged)) {
       if (data.emailResent) {
-        showAlert(manageAlert, '✅ Angaben geändert – ein aktualisiertes Ticket wurde an die neue E-Mail-Adresse gesendet.', 'success');
+        showAlert(manageAlert, 'Angaben geändert – ein aktualisiertes Ticket wurde an die neue E-Mail-Adresse gesendet.', 'success');
       } else {
-        showAlert(manageAlert, '⚠️ Angaben geändert, aber E-Mail-Versand fehlgeschlagen. Bitte Orga-Team kontaktieren.', 'warning');
+        showAlert(manageAlert, 'Angaben geändert, aber E-Mail-Versand fehlgeschlagen. Bitte Orga-Team kontaktieren.', 'warning');
       }
     }
   } catch { feedback.innerHTML = '<span class="feedback-err">Verbindungsfehler.</span>'; }
@@ -904,7 +975,7 @@ submitBtn.addEventListener('click', async () => {
     if (res.status === 409) {
       showAlert(alertBox,
         'Du hast bereits eine Bestellung. ' +
-        `<a href="/order.html?personId=${person.id}&code=${encodeURIComponent(code)}&mode=manage">Hier einsehen →</a>`,
+        `<a href="/order.html?personId=${person.id}&code=${encodeURIComponent(code)}&mode=manage">Hier einsehen &rarr;</a>`,
         'warning'
       );
       return;
@@ -917,6 +988,7 @@ submitBtn.addEventListener('click', async () => {
     orderCard.style.display   = 'none';
     paymentCard.style.display = 'block';
 
+    // Reload fresh from server so ticket QR tokens are initialized
     const freshRes  = await fetch(`/api/tickets/my-order?code=${encodeURIComponent(code)}`);
     const freshData = await freshRes.json();
     if (freshRes.ok) {
@@ -924,15 +996,22 @@ submitBtn.addEventListener('click', async () => {
       currentTickets = freshData.tickets;
       renderManage(freshData);
     } else {
+      // Fallback: zeige nur Zahlungsinfo ohne Tabs
+      injectManageStyles();
       paymentCard.innerHTML = `
         <div class="pay-box">
           <div class="pay-box-header">Zahlungsdetails</div>
           <div class="pay-row"><span class="pay-row-label">Betrag</span><span class="pay-row-value pay-amount">${fmt(data.totalEur)}</span></div>
           <div class="pay-row"><span class="pay-row-label">Empfänger</span><span class="pay-row-value">${esc(config.accountName)}</span></div>
           <div class="pay-row"><span class="pay-row-label">IBAN</span><span class="pay-row-value"><code>${esc(config.iban)}</code></span></div>
-          <div class="pay-row"><span class="pay-row-label">Referenz</span><span class="pay-row-value"><code>${esc(data.reference)}</code></span></div>
+          <div class="pay-row"><span class="pay-row-label">Verwendungszweck</span><span class="pay-row-value"><code>${esc(data.reference)}</code></span></div>
         </div>
-        ${data.epcQr ? `<div class="qr-center"><img src="${data.epcQr}" alt="Zahlung QR-Code"><span class="qr-label">Mit Banking-App scannen</span></div>` : ''}
+        ${data.epcQr ? `
+          <div class="qr-block">
+            <span class="qr-block-title">GiroCode – Banking-App scannen</span>
+            <img src="${data.epcQr}" alt="Zahlung QR-Code" width="192" height="192">
+            <span class="qr-block-label">${esc(data.reference)}</span>
+          </div>` : ''}
       `;
     }
   } catch { showAlert(alertBox, 'Verbindungsfehler. Bitte versuche es erneut.'); }

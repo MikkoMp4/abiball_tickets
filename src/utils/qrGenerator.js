@@ -1,11 +1,11 @@
 /**
  * qrGenerator.js – Erzeugt QR-Code-PNGs
  *
- * generateQrDataUrl()        – Base64 data-URL (EPC / Zahlungs-QR)
- * generateQrBuffer()         – Rohes PNG-Buffer (legacy, ohne token-Tracking)
- * generateQrBufferForTicket()– Rohes PNG-Buffer.
- *                              Reuses existing qr_token unless forceRotate=true.
- *                              forceRotate:true only when name/email actually changed.
+ * generateQrDataUrl()         – Base64 data-URL (EPC / Zahlungs-QR)
+ * generateQrBuffer()          – Rohes PNG-Buffer (legacy, ohne token-Tracking)
+ * generateQrBufferForTicket() – Rohes PNG-Buffer.
+ *                               Reuses existing qr_token unless forceRotate=true.
+ *                               forceRotate:true only when name/email actually changed.
  */
 const QRCode = require('qrcode');
 const crypto = require('crypto');
@@ -27,20 +27,29 @@ async function generateQrBuffer(data) {
  *
  * forceRotate:true nur bei echten Änderungen (Name/E-Mail-Update in PATCH-Route).
  *
- * @param {object} db          better-sqlite3-Instanz
- * @param {object} ticket      order_tickets-Zeile (muss .id und .qr_token enthalten)
- * @param {object} extraMeta   Zusätzliche Felder für den QR-Inhalt
- * @param {boolean} forceRotate  Neues Token erzwingen (default: false)
+ * @param {object}  db          better-sqlite3-Instanz
+ * @param {object}  ticket      order_tickets-Zeile (muss .id und .qr_token enthalten)
+ * @param {object}  extraMeta   Zusätzliche Felder für den QR-Inhalt
+ * @param {boolean} forceRotate Neues Token erzwingen (default: false)
  * @returns {Promise<Buffer>}
  */
 async function generateQrBufferForTicket(db, ticket, extraMeta = {}, forceRotate = false) {
+  // Guard: ticket must be an object with an id
+  if (!ticket || typeof ticket.id === 'undefined') {
+    throw new Error('generateQrBufferForTicket: ungültiges Ticket-Objekt (kein id)');
+  }
+
   let token = ticket.qr_token;
 
   if (!token || forceRotate) {
     token = crypto.randomUUID();
+    // Re-fetch the latest row to avoid using a stale object; write token atomically
     db.prepare(
       "UPDATE order_tickets SET qr_token = ?, qr_issued_at = datetime('now') WHERE id = ?"
     ).run(token, ticket.id);
+    // Refresh the in-memory ticket reference so callers see the new token
+    ticket.qr_token     = token;
+    ticket.qr_issued_at = new Date().toISOString();
   }
 
   const payload = JSON.stringify({
