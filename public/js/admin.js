@@ -124,9 +124,10 @@ async function loadPersons() {
 
 function renderPersons(persons) {
   const tbody = document.getElementById('personsTbody');
-  if (!persons.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">Keine Personen vorhanden.</td></tr>'; return; }
+  if (!persons.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted)">Keine Personen vorhanden.</td></tr>'; return; }
   tbody.innerHTML = persons.map(p => `
     <tr>
+      <td><span class="badge badge-muted" title="Person-ID für Danger Zone">#${p.id}</span></td>
       <td><strong>${esc(p.name)}</strong></td>
       <td><code>${esc(p.code)}</code></td>
       <td>${p.num_tickets}</td>
@@ -145,7 +146,6 @@ window.deletePerson = async function(id) {
 };
 
 // ── Generate codes ─────────────────────────────────────────────────────────
-// Format: Name; Anzahl Tickets  (no email – ticket holders enter their own)
 function setupGenerateCodes() {
   document.getElementById('generateBtn')?.addEventListener('click', async () => {
     clearAlert('genAlert');
@@ -189,13 +189,13 @@ function renderOrders(orders) {
   const tbody = document.getElementById('ordersTbody');
   if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted)">Keine Bestellungen vorhanden.</td></tr>'; return; }
   tbody.innerHTML = filtered.map(o => {
-    // extra_info column now stores ticket e-mail; ticket_name stores the name
     const ticketSummary = (o.tickets||[]).map(t => {
       const nm = esc(t.ticket_name);
       const em = t.extra_info ? ` &lt;${esc(t.extra_info)}&gt;` : '';
       return nm + em;
     }).join(', ') || '–';
     return `<tr>
+      <td><span class="badge badge-muted" title="Bestellungs-ID für Danger Zone">#${o.id}</span></td>
       <td><strong>${esc(o.person_name)}</strong></td>
       <td><code>${esc(o.person_code)}</code></td>
       <td title="${ticketSummary}" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.ticket_count} (${ticketSummary})</td>
@@ -231,11 +231,12 @@ async function loadPayments() {
 
 function renderPayments(payments) {
   const tbody = document.getElementById('paymentsTbody');
-  if (!payments.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">Keine Zahlungen vorhanden.</td></tr>'; return; }
+  if (!payments.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted)">Keine Zahlungen vorhanden.</td></tr>'; return; }
   tbody.innerHTML = payments.map(p => `<tr>
+    <td><span class="badge badge-muted" title="Zahlungs-ID für Danger Zone">#${p.id}</span></td>
     <td style="font-size:.82rem">${esc(p.booking_date||'–')}</td>
     <td>${esc(p.sender_name||'–')}</td>
-    <td style="font-size:.82rem;max-width:200px;overflow:hidden;text-overflow:ellipsis">${esc(p.reference||'–')}</td>
+    <td style="font-size:.82rem;max-width:180px;overflow:hidden;text-overflow:ellipsis">${esc(p.reference||'–')}</td>
     <td>${fmt(p.amount_eur)}</td>
     <td>${p.person_name?`<strong>${esc(p.person_name)}</strong>`:'<span style="color:var(--muted)">nicht zugeordnet</span>'}</td>
     <td>${p.matched?(p.qr_sent?'<span class="badge badge-success">QR gesendet</span>':'<span class="badge badge-warning">Zahlung ok</span>'):'<span class="badge badge-muted">offen</span>'}</td>
@@ -248,7 +249,7 @@ window.sendTickets = async function(paymentId, btn) {
   try {
     const res  = await fetch(`/api/payments/${paymentId}/send`, { method:'POST' });
     const data = await res.json();
-    if (res.ok) { showAlert('paymentsAlert',`✅ Tickets an ${data.sentTo} gesendet.`,'success'); loadPayments(); }
+    if (res.ok) { showAlert('paymentsAlert',`✅ Tickets an ${(data.sentTo||[]).join(', ')} gesendet.`,'success'); loadPayments(); }
     else { showAlert('paymentsAlert',data.error||'Fehler beim Senden.'); btn.disabled=false; btn.textContent='✉ Tickets senden'; }
   } catch { showAlert('paymentsAlert','Verbindungsfehler.'); btn.disabled=false; btn.textContent='✉ Tickets senden'; }
 };
@@ -311,8 +312,6 @@ async function loadSettings() {
     document.getElementById('s-bank-iban').value      = s.bank_iban      || '';
     document.getElementById('s-bank-bic').value       = s.bank_bic       || '';
     document.getElementById('settingsPreview').textContent = JSON.stringify(s, null, 2);
-
-    // FIX: API returns `envStatus`, not `env`
     const envDiv = document.getElementById('envStatusContent');
     if (envDiv && data.envStatus) {
       envDiv.innerHTML = Object.entries(data.envStatus).map(([k, v]) =>
