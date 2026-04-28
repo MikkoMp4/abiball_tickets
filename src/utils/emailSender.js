@@ -46,13 +46,13 @@ async function sendTicketEmail({ to, personName, qrBuffers }) {
   const info = await transport.sendMail({
     from: process.env.MAIL_FROM || '"Abiball Tickets" <tickets@example.com>',
     to,
-    subject: 'Deine Abiball-Tickets 🎓',
-    text: `Hallo ${personName},\n\nvielen Dank für deine Zahlung! Im Anhang findest du deine Ticket-QR-Codes.\nBitte zeige diese am Einlass vor.\n\nWir freuen uns auf einen unvergesslichen Abend!\n\nDein Abiball-Team`,
+    subject: 'Deine Abiball-Tickets',
+    text: `Hallo ${personName},\n\nvielen Dank für deine Bestellung! Im Anhang findest du deine Ticket-QR-Codes.\nBitte zeige diese am Einlass vor.\n Zur Erinnerung: Der Abiball ist am 26.06.2026!\nVorrraussichtlicher Start ist um !7:00 Uhr, dazu kriegst du aber nocheinmal eine E-mail!\n\nDas Orga Team`,
     html: `<p>Hallo <strong>${safeName}</strong>,</p>
-           <p>vielen Dank für deine Zahlung! Im Anhang findest du deine Ticket-QR-Codes.<br>
+           <p>vielen Dank für deine Bestellung! Im Anhang findest du deine Ticket-QR-Codes.<br>
            Bitte zeige diese am Einlass vor.</p>
-           <p>Wir freuen uns auf einen unvergesslichen Abend!</p>
-           <p><em>Dein Abiball-Team</em></p>`,
+           <p>Zur Erinnerung: der Abiball ist am <strong>26.06.2026.</strong><br>Vorraussichtlicher Start ist um 17:00 Uhr, dazu kriegst du aber nocheinmal eine Mail.</p>
+           <p><em>Das Orga-Team</em></p>`,
     attachments,
   });
 
