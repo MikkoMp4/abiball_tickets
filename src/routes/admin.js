@@ -1,16 +1,17 @@
 /**
  * routes/admin.js – Admin-Endpunkte
  *
- * POST   /api/admin/generate-codes          – Codes für mehrere Personen generieren
- * GET    /api/admin/persons                 – Alle Personen auflisten
- * PATCH  /api/admin/persons/:id             – Person aktualisieren
- * DELETE /api/admin/persons/:id             – Person löschen (CASCADE)
- * GET    /api/admin/orders                  – Alle Bestellungen auflisten
- * GET    /api/admin/stats                   – Dashboard-Statistiken
- * POST   /api/admin/upload-pdf              – Bank-PDF hochladen, abgleichen, E-Mails senden
- * GET    /api/admin/export/csv              – Codes als CSV exportieren
- * GET    /api/admin/export/excel            – Codes als Excel exportieren
- * POST   /api/admin/orders/:id/mark-paid   – Bestellung als bezahlt markieren + E-Mail senden
+ * POST   /api/admin/generate-codes                      – Codes für mehrere Personen generieren
+ * GET    /api/admin/persons                             – Alle Personen auflisten
+ * PATCH  /api/admin/persons/:id                         – Person aktualisieren
+ * DELETE /api/admin/persons/:id                         – Person löschen (CASCADE)
+ * GET    /api/admin/orders                              – Alle Bestellungen auflisten
+ * GET    /api/admin/stats                               – Dashboard-Statistiken
+ * POST   /api/admin/upload-pdf                          – Bank-PDF hochladen, abgleichen, E-Mails senden
+ * GET    /api/admin/export/csv                          – Codes als CSV exportieren
+ * GET    /api/admin/export/excel                        – Codes als Excel exportieren
+ * POST   /api/admin/orders/:id/mark-paid                – Bestellung als bezahlt markieren + E-Mail senden
+ * DELETE /api/admin/orders/:orderId/ticket/:ticketId    – Einzelnes Ticket aus Bestellung löschen (Admin only)
  *
  * ── DANGER ZONE ─────────────────────────────────────────────────────────────
  * DELETE /api/admin/danger/person/:id       – Einzelne Person + alle Daten löschen
@@ -214,8 +215,6 @@ router.get('/stats', (req, res) => {
 });
 
 // ── POST /api/admin/upload-pdf ───────────────────────────────────────────────
-// Parses bank PDF, matches payments, marks orders paid,
-// and auto-sends QR ticket emails to every newly matched person.
 router.post('/upload-pdf', pdfUpload.array('pdfs', 20), async (req, res) => {
   if (!req.files || req.files.length === 0) {
     return res.status(400).json({ error: 'Keine PDF-Datei hochgeladen' });
@@ -224,7 +223,7 @@ router.post('/upload-pdf', pdfUpload.array('pdfs', 20), async (req, res) => {
   const db          = getDb();
   const settings    = getSettings();
   const allResults  = [];
-  const matchedForEmail = []; // collect { person, order } for email sending after DB work
+  const matchedForEmail = [];
 
   for (const file of req.files) {
     let transactions;
@@ -275,7 +274,6 @@ router.post('/upload-pdf', pdfUpload.array('pdfs', 20), async (req, res) => {
     }
   }
 
-  // Send emails outside the PDF-parsing loop (async I/O, non-blocking to DB)
   const emailResults = [];
   for (const { person, order } of matchedForEmail) {
     try {
@@ -295,7 +293,6 @@ router.post('/upload-pdf', pdfUpload.array('pdfs', 20), async (req, res) => {
 });
 
 // ── POST /api/admin/orders/:id/mark-paid ─────────────────────────────────────────
-// Marks order as paid and immediately sends QR ticket emails.
 router.post('/orders/:id/mark-paid', async (req, res) => {
   const db    = getDb();
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
@@ -305,7 +302,6 @@ router.post('/orders/:id/mark-paid', async (req, res) => {
 
   db.prepare("UPDATE orders SET paid = 1, paid_at = datetime('now') WHERE id = ?").run(req.params.id);
 
-  // Reload order after update so paid=1 is reflected
   const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   const person       = db.prepare('SELECT * FROM persons WHERE id = ?').get(updatedOrder.person_id);
 
@@ -320,6 +316,52 @@ router.post('/orders/:id/mark-paid', async (req, res) => {
   }
 
   res.json({ ok: true, email: emailResult });
+});
+
+// ── DELETE /api/admin/orders/:orderId/ticket/:ticketId ───────────────────────
+// Admin-only: remove a single ticket from any order.
+// Does NOT require dangerPassword – regular admin session is sufficient.
+// Blocked for paid orders to prevent QR-token inconsistency.
+router.delete('/orders/:orderId/ticket/:ticketId', (req, res) => {
+  const db = getDb();
+  const s  = getSettings();
+
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.orderId);
+  if (!order) return res.status(404).json({ error: 'Bestellung nicht gefunden' });
+
+  // Admins can delete tickets from paid orders only after explicit acknowledgement;
+  // return a dedicated error code so the admin UI can show a confirmation dialog.
+  if (order.paid === 1) {
+    return res.status(409).json({
+      error: 'paid_order',
+      message: 'Diese Bestellung wurde bereits bezahlt. Bitte den Sachverhalt prüfen und ggf. die Gefahr-Zone verwenden.',
+    });
+  }
+
+  const remaining = db.prepare(
+    'SELECT COUNT(*) as cnt FROM order_tickets WHERE order_id = ?'
+  ).get(req.params.orderId);
+  if (remaining.cnt <= 1) {
+    return res.status(409).json({
+      error: 'last_ticket',
+      message: 'Mindestens ein Ticket muss verbleiben. Um die gesamte Bestellung zu löschen, die Gefahr-Zone verwenden.',
+    });
+  }
+
+  const ticket = db.prepare(
+    'SELECT * FROM order_tickets WHERE id = ? AND order_id = ?'
+  ).get(req.params.ticketId, req.params.orderId);
+  if (!ticket) return res.status(404).json({ error: 'Ticket nicht gefunden' });
+
+  const ticketPrice = parseFloat(s.ticket_price || '45');
+
+  db.transaction(() => {
+    db.prepare('DELETE FROM order_tickets WHERE id = ?').run(req.params.ticketId);
+    db.prepare('UPDATE orders SET total_eur = total_eur - ? WHERE id = ?').run(ticketPrice, req.params.orderId);
+  })();
+
+  const newTotal = db.prepare('SELECT total_eur FROM orders WHERE id = ?').get(req.params.orderId).total_eur;
+  res.json({ ok: true, newTotalEur: newTotal, deletedTicket: ticket });
 });
 
 // ── GET /api/admin/export/csv ────────────────────────────────────────────────
