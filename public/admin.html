@@ -238,7 +238,7 @@
       <h2>📊 Kontoauszug als CSV hochladen</h2>
       <div id="csvUploadAlert"></div>
       <div class="form-group"><label for="statementFile">CSV-Datei (max. 5 MB)</label><input type="file" id="statementFile" accept=".csv,.txt"></div>
-      <button class="btn btn-outline" id="csvUploadBtn">Hochladen &amp; prüfen</button>
+      <button class="btn btn-outline-dark" id="csvUploadBtn">Hochladen &amp; prüfen</button>
     </div>
     <div class="card" id="pdfResultCard" style="display:none">
       <h2>📋 Ergebnis der PDF-Verarbeitung</h2>
@@ -268,7 +268,7 @@
           <option value="all">Alle</option><option value="paid">Bezahlt</option>
           <option value="unpaid">Offen</option><option value="sent">QR gesendet</option>
         </select>
-        <button class="btn btn-outline" style="padding:.35rem .85rem;font-size:.85rem" onclick="loadOrders()">&#x1F504; Aktualisieren</button>
+        <button class="btn btn-outline-dark" style="padding:.35rem .85rem;font-size:.85rem" onclick="loadOrders()">&#x1F504; Aktualisieren</button>
       </div>
       <div style="overflow-x:auto">
         <table><thead><tr><th>ID</th><th>Person</th><th>Code</th><th>Tickets (Name &lt;E-Mail&gt;)</th><th>Betrag</th><th>Status</th><th>Bestellt</th><th></th></tr></thead>
@@ -289,17 +289,15 @@
         Beispiel: <code>Max Mustermann; 2</code>
       </p>
       <div class="form-group"><label for="personsBulk">Personen (eine pro Zeile)</label>
-        <textarea id="personsBulk" rows="8" placeholder="Max Mustermann; 2
-Erika Muster; 1
-Anna Schmidt; 3"></textarea>
+        <textarea id="personsBulk" rows="8" placeholder="Max Mustermann; 2&#10;Erika Muster; 1&#10;Anna Schmidt; 3"></textarea>
       </div>
       <button class="btn btn-primary" id="generateBtn">Codes generieren</button>
     </div>
     <div class="card">
       <h2>📥 Codes exportieren</h2>
       <div style="display:flex;gap:.75rem;flex-wrap:wrap">
-        <a class="btn btn-outline" href="/api/admin/export/csv" download>⬇ CSV herunterladen</a>
-        <a class="btn btn-outline" href="/api/admin/export/excel" download>⬇ Excel herunterladen</a>
+        <a class="btn btn-outline-dark" href="/api/admin/export/csv" download>⬇ CSV herunterladen</a>
+        <a class="btn btn-outline-dark" href="/api/admin/export/excel" download>⬇ Excel herunterladen</a>
       </div>
     </div>
     <div class="card">
