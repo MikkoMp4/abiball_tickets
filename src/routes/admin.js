@@ -350,16 +350,31 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
 
   // Split-Payment: Referenz endet auf -N → entsprechendes Ticket als bezahlt markieren
   if (order.split_payment) {
-    const splitMatch = ref.match(/-(\d+)$/);
-    if (splitMatch) {
-      const ticketNum = parseInt(splitMatch[1], 10);
-      const ticket = db.prepare(
-        'SELECT * FROM order_tickets WHERE order_id = ? AND split_ref LIKE ?'
-      ).get(order.id, `%-${ticketNum}`);
-      if (ticket && !ticket.split_paid_at) {
+  const splitMatch = ref.match(/-(\d+)$/);
+  if (splitMatch) {
+    const ticketNum = parseInt(splitMatch[1], 10);
+    const ticket = db.prepare(
+      'SELECT * FROM order_tickets WHERE order_id = ? AND split_ref LIKE ?'
+    ).get(order.id, `%-${ticketNum}`);
+    if (ticket && !ticket.split_paid_at) {
+      db.prepare(
+        "UPDATE order_tickets SET split_paid_at = datetime('now'), split_amount = ?, ticket_paid = 1 WHERE id = ?"
+      ).run(row.amount_eur, ticket.id);
+    }
+  } else {
+    // Keine Nummer am Ende → Gesamtzahlung, alle noch offenen Tickets bezahlen
+    const s = getSettings();
+    const ticketPrice = parseFloat(s.ticket_price || '45');
+    let remaining = row.amount_eur;
+    const unpaidTickets = db.prepare(
+      'SELECT * FROM order_tickets WHERE order_id = ? AND split_paid_at IS NULL ORDER BY id ASC'
+    ).all(order.id);
+    for (const ticket of unpaidTickets) {
+      if (remaining >= ticketPrice - 0.01) {
         db.prepare(
           "UPDATE order_tickets SET split_paid_at = datetime('now'), split_amount = ?, ticket_paid = 1 WHERE id = ?"
-        ).run(row.amount_eur, ticket.id);
+        ).run(ticketPrice, ticket.id);
+        remaining -= ticketPrice;
       }
     }
   }
