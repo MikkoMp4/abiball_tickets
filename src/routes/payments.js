@@ -201,7 +201,7 @@ router.post('/upload', upload.single('statement'), async (req, res) => {
         matched:    matchedPerson ? 1 : 0,
       });
 
-      if (matchedPerson && info.changes > 0) affectedPersonIds.add(matchedPerson.id);
+      if (matchedPerson) affectedPersonIds.add(matchedPerson.id);
       results.push({
         reference:  entry.reference,
         senderName: entry.senderName,
