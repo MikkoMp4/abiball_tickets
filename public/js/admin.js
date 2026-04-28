@@ -105,8 +105,8 @@ function paidBadge(order) {
 
 /** Badge für ein einzelnes Split-Ticket */
 function splitTicketBadge(ticket) {
-  if (ticket.split_paid_at) {
-    return `<span class="badge badge-success" title="Bezahlt am ${esc(ticket.split_paid_at?.slice(0,16)||'')}" style="font-size:.7rem">✓ ${fmt(ticket.split_amount)}</span>`;
+  if (ticket.ticket_paid) {
+    return `<span class="badge badge-success" style="font-size:.7rem">✓ Bezahlt</span>`;
   }
   return `<span class="badge badge-warning" style="font-size:.7rem">ausstehend</span>`;
 }
@@ -236,22 +236,29 @@ function renderOrders(orders) {
   }
   tbody.innerHTML = filtered.map(o => {
     const ticketRows = (o.tickets || []).map((t, i) => {
+      // For split orders: show badge + per-ticket mark-paid button if not yet paid
       const splitBadgeHtml = o.split_payment
         ? `<span style="margin-left:.3rem">${splitTicketBadge(t)}</span>`
         : '';
       const splitRefHtml = o.split_payment && t.split_ref
         ? `<code style="font-size:.7rem;color:var(--muted);display:block">${esc(t.split_ref)}</code>`
         : '';
-      return `<div style="display:flex;align-items:center;gap:.5rem;padding:.25rem 0;border-bottom:1px solid #eee">
+      // Per-ticket mark-paid button: only for split orders with unpaid tickets
+      const ticketMarkPaidBtn = (o.split_payment && !t.ticket_paid)
+        ? `<button class="btn btn-success" style="padding:.2rem .45rem;font-size:.72rem;white-space:nowrap" onclick="adminMarkTicketPaid(${o.id},${t.id},this)" title="Dieses Ticket als bezahlt markieren">✓ bezahlt</button>`
+        : '';
+
+      return `<div style="display:flex;align-items:center;gap:.4rem;padding:.25rem 0;border-bottom:1px solid #eee;flex-wrap:wrap">
         <span style="font-size:.8rem;color:#777">T${i+1}</span>
-        <span style="flex:1;font-size:.85rem">
+        <span style="flex:1;font-size:.85rem;min-width:120px">
           ${esc(t.ticket_name)} &lt;${esc(t.ticket_email || '–')}&gt;
           ${splitRefHtml}
         </span>
         ${splitBadgeHtml}
-        ${o.paid !== 1
+        ${ticketMarkPaidBtn}
+        ${o.paid !== 1 && !t.ticket_paid
           ? `<button class="btn btn-danger" style="padding:.2rem .5rem;font-size:.75rem" onclick="adminDeleteTicket(${o.id},${t.id},this)">🗑</button>`
-          : `<span class="badge badge-muted" style="font-size:.7rem">bezahlt</span>`
+          : (o.paid === 1 ? `<span class="badge badge-muted" style="font-size:.7rem">bezahlt</span>` : '')
         }
       </div>`;
     }).join('');
@@ -259,6 +266,18 @@ function renderOrders(orders) {
     const splitIcon = o.split_payment
       ? `<span title="Separat-Zahlung" style="margin-left:.4rem;font-size:.8rem">💳</span>`
       : '';
+
+    // Whole-order mark-paid button: show remaining amount for partial orders
+    let markPaidBtn = '';
+    if (o.paid !== 1) {
+      const remaining = o.paid === 2
+        ? fmt((parseFloat(o.total_eur) || 0) - (parseFloat(o.paid_amount) || 0))
+        : fmt(o.total_eur);
+      const label = o.paid === 2
+        ? `✓ Restbetrag (${remaining}) als bezahlt`
+        : `✓ Als bezahlt markieren`;
+      markPaidBtn = `<button class="btn btn-success" style="padding:.3rem .7rem;font-size:.8rem;white-space:nowrap" onclick="markPaid(${o.id},this)">${label}</button>`;
+    }
 
     return `<tr>
       <td><span class="badge badge-muted" title="Bestellungs-ID">#${o.id}</span></td>
@@ -268,17 +287,16 @@ function renderOrders(orders) {
       <td>${fmt(o.total_eur)}${splitIcon}</td>
       <td>${paidBadge(o)}</td>
       <td style="font-size:.82rem;color:var(--muted)">${esc(o.created_at?.slice(0,16)||'')}</td>
-      <td>${o.paid !== 1
-        ? `<button class="btn btn-success" style="padding:.3rem .7rem;font-size:.8rem" onclick="markPaid(${o.id},this)">✓ Als bezahlt markieren</button>`
-        : ''}</td>
+      <td>${markPaidBtn}</td>
     </tr>`;
   }).join('');
 }
 
 document.getElementById('ordersFilter')?.addEventListener('change', () => renderOrders(allOrders));
 
+// ── Mark entire order as paid ──────────────────────────────────────────────
 window.markPaid = async function(orderId, btn) {
-  if (!confirm('Bestellung manuell als bezahlt markieren?')) return;
+  if (!confirm('Bestellung manuell als vollständig bezahlt markieren?')) return;
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
   try {
     const res  = await fetch(`/api/admin/orders/${orderId}/mark-paid`, { method: 'POST' });
@@ -286,6 +304,29 @@ window.markPaid = async function(orderId, btn) {
     if (res.ok) { loadOrders(); loadStats(); loadDashUnpaid(); }
     else { showAlert('ordersAlert', data.error || 'Fehler.'); btn.disabled = false; btn.textContent = '✓ Als bezahlt markieren'; }
   } catch { showAlert('ordersAlert', 'Verbindungsfehler.'); btn.disabled = false; btn.textContent = '✓ Als bezahlt markieren'; }
+};
+
+// ── Mark single ticket as paid (split orders) ─────────────────────────────
+window.adminMarkTicketPaid = async function(orderId, ticketId, btn) {
+  if (!confirm('Dieses einzelne Ticket als bezahlt markieren? Das Ticket-QR wird per E-Mail verschickt.')) return;
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const res  = await fetch(`/api/admin/orders/${orderId}/ticket/${ticketId}/mark-paid`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      const emailInfo = data.email?.ok
+        ? ` E-Mail gesendet an ${esc(data.email.sentTo)}.`
+        : (data.email?.error ? ` ⚠️ E-Mail fehlgeschlagen: ${esc(data.email.error)}` : '');
+      showAlert('ordersAlert', `✅ Ticket als bezahlt markiert.${emailInfo}`, 'success');
+      loadOrders(); loadStats(); loadDashUnpaid();
+    } else {
+      showAlert('ordersAlert', data.error || 'Fehler beim Markieren.');
+      btn.disabled = false; btn.textContent = '✓ bezahlt';
+    }
+  } catch {
+    showAlert('ordersAlert', 'Verbindungsfehler.');
+    btn.disabled = false; btn.textContent = '✓ bezahlt';
+  }
 };
 
 window.adminDeleteTicket = async function(orderId, ticketId, btn) {
@@ -378,7 +419,7 @@ function setupPdfUpload() {
 function setupCsvUpload() {
   document.getElementById('csvUploadBtn')?.addEventListener('click', async () => {
     const fi = document.getElementById('statementFile');
-    if (!fi.files.length) { showAlert('csvUploadAlert', 'Bitte eine Datei auswählen.', 'warning'); return; }
+    if (!fi.files.length) { showAlert('csvUploadAlert', 'Bitte eine Datei auswählen.', 'warning'); return; }\
     setBtn('csvUploadBtn', true, '<span class="spinner"></span> Verarbeite…');
     clearAlert('csvUploadAlert');
     const form = new FormData();
