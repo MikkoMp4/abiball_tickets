@@ -57,14 +57,13 @@ verifyBtn.addEventListener('click', async () => {
     }
 
     if (data.alreadyOrdered) {
-      showAlert(
-        `Code bereits verwendet. Du hast bereits eine Bestellung aufgegeben, ${data.person.name}.`,
-        'warning'
-      );
+      // Redirect to manage-mode so they can view/edit their existing order
+      window.location.href =
+        `/order.html?personId=${data.person.id}&code=${encodeURIComponent(code)}&mode=manage`;
       return;
     }
 
-    // Weiterleitung zur Bestellseite
+    // No existing order – go to fresh order form
     window.location.href = `/order.html?personId=${data.person.id}&code=${encodeURIComponent(code)}`;
 
   } catch {

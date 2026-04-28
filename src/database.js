@@ -87,6 +87,16 @@ function initSchema(db) {
     db.exec('ALTER TABLE order_tickets ADD COLUMN ticket_email TEXT');
   }
 
+  // Migrate order_tickets: add qr_token + qr_issued_at for validity tracking
+  // qr_token is regenerated each time a ticket is (re-)issued, invalidating old QR codes.
+  const ticketColsNow = db.pragma('table_info(order_tickets)').map(c => c.name);
+  if (!ticketColsNow.includes('qr_token')) {
+    db.exec('ALTER TABLE order_tickets ADD COLUMN qr_token TEXT');
+  }
+  if (!ticketColsNow.includes('qr_issued_at')) {
+    db.exec('ALTER TABLE order_tickets ADD COLUMN qr_issued_at TEXT');
+  }
+
   // Seed default settings if not present
   const seedSetting = db.prepare(
     'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)'
