@@ -15,6 +15,7 @@ function getDb() {
   if (!db) {
     db = new Database(DB_PATH);
     db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');   // ← enforce FK constraints on every connection
     initSchema(db);
   }
   return db;
@@ -33,7 +34,7 @@ function initSchema(db) {
 
     CREATE TABLE IF NOT EXISTS orders (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
-      person_id  INTEGER NOT NULL REFERENCES persons(id),
+      person_id  INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
       submitted  INTEGER NOT NULL DEFAULT 0,
       total_eur  REAL,
       epc_blob   TEXT,
@@ -44,15 +45,15 @@ function initSchema(db) {
 
     CREATE TABLE IF NOT EXISTS order_tickets (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
-      order_id     INTEGER NOT NULL REFERENCES orders(id),
+      order_id     INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
       ticket_name  TEXT    NOT NULL,
-      ticket_class TEXT,
+      ticket_email TEXT,
       extra_info   TEXT
     );
 
     CREATE TABLE IF NOT EXISTS payments (
       id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      person_id       INTEGER REFERENCES persons(id),
+      person_id       INTEGER REFERENCES persons(id) ON DELETE SET NULL,
       amount_eur      REAL,
       reference       TEXT,
       sender_name     TEXT,
@@ -77,6 +78,15 @@ function initSchema(db) {
     db.exec('ALTER TABLE orders ADD COLUMN paid_at TEXT');
   }
 
+  // Migrate order_tickets: rename ticket_class → ticket_email if needed
+  const ticketCols = db.pragma('table_info(order_tickets)').map(c => c.name);
+  if (ticketCols.includes('ticket_class') && !ticketCols.includes('ticket_email')) {
+    db.exec('ALTER TABLE order_tickets RENAME COLUMN ticket_class TO ticket_email');
+  }
+  if (!ticketCols.includes('ticket_email') && !ticketCols.includes('ticket_class')) {
+    db.exec('ALTER TABLE order_tickets ADD COLUMN ticket_email TEXT');
+  }
+
   // Seed default settings if not present
   const seedSetting = db.prepare(
     'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)'
@@ -95,7 +105,6 @@ function initSchema(db) {
   ];
   const seedAll = db.transaction(() => {
     defaults.forEach(([k, v]) => seedSetting.run(k, v));
-    // Always reflect env vars so Docker environment variables take immediate effect
     if (process.env.BANK_IBAN)    upsertSetting.run('bank_iban',    process.env.BANK_IBAN);
     if (process.env.BANK_BIC)     upsertSetting.run('bank_bic',     process.env.BANK_BIC);
     if (process.env.BANK_NAME)    upsertSetting.run('bank_name',    process.env.BANK_NAME);
