@@ -84,9 +84,9 @@ function setBtn(id, disabled, html) {
 }
 
 /**
- * Gibt ein Badge-HTML fuer den Bezahlstatus einer Bestellung zurueck.
+ * Badge für den Bezahlstatus einer Bestellung.
  *   paid=0 → Ausstehend  (gelb)
- *   paid=1 → Bezahlt     (gruen)
+ *   paid=1 → Bezahlt     (grün)
  *   paid=2 → Teilzahlung (orange)
  */
 function paidBadge(order) {
@@ -101,6 +101,14 @@ function paidBadge(order) {
            `<br><span style="font-size:.75rem;color:var(--muted)">${paidAmt} von ${total}</span>`;
   }
   return '<span class="badge badge-warning">Ausstehend</span>';
+}
+
+/** Badge für ein einzelnes Split-Ticket */
+function splitTicketBadge(ticket) {
+  if (ticket.split_paid_at) {
+    return `<span class="badge badge-success" title="Bezahlt am ${esc(ticket.split_paid_at?.slice(0,16)||'')}" style="font-size:.7rem">✓ ${fmt(ticket.split_amount)}</span>`;
+  }
+  return `<span class="badge badge-warning" style="font-size:.7rem">ausstehend</span>`;
 }
 
 // ── Stats ─────────────────────────────────────────────────────────────────
@@ -127,7 +135,6 @@ async function loadDashUnpaid() {
     const res  = await fetch('/api/admin/orders');
     if (res.status === 401) return;
     const data  = await res.json();
-    // Dashboard zeigt alle nicht vollstaendig bezahlten Bestellungen (offen + Teilzahlung)
     const unpaid = (data.orders || []).filter(o => o.paid !== 1);
     const tbody  = document.getElementById('dashUnpaidTbody');
     if (!unpaid.length) {
@@ -220,28 +227,45 @@ function renderOrders(orders) {
   if (filter === 'paid')    filtered = orders.filter(o => o.paid === 1);
   if (filter === 'partial') filtered = orders.filter(o => o.paid === 2);
   if (filter === 'unpaid')  filtered = orders.filter(o => o.paid === 0);
+  if (filter === 'split')   filtered = orders.filter(o => o.split_payment);
+
   const tbody = document.getElementById('ordersTbody');
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted)">Keine Bestellungen vorhanden.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted)">Keine Bestellungen vorhanden.</td></tr>';
     return;
   }
   tbody.innerHTML = filtered.map(o => {
-    const ticketRows = (o.tickets || []).map((t, i) =>
-      `<div style="display:flex;align-items:center;gap:.5rem;padding:.25rem 0;border-bottom:1px solid #eee">
+    const ticketRows = (o.tickets || []).map((t, i) => {
+      const splitBadgeHtml = o.split_payment
+        ? `<span style="margin-left:.3rem">${splitTicketBadge(t)}</span>`
+        : '';
+      const splitRefHtml = o.split_payment && t.split_ref
+        ? `<code style="font-size:.7rem;color:var(--muted);display:block">${esc(t.split_ref)}</code>`
+        : '';
+      return `<div style="display:flex;align-items:center;gap:.5rem;padding:.25rem 0;border-bottom:1px solid #eee">
         <span style="font-size:.8rem;color:#777">T${i+1}</span>
-        <span style="flex:1;font-size:.85rem">${esc(t.ticket_name)} &lt;${esc(t.ticket_email || '–')}&gt;</span>
+        <span style="flex:1;font-size:.85rem">
+          ${esc(t.ticket_name)} &lt;${esc(t.ticket_email || '–')}&gt;
+          ${splitRefHtml}
+        </span>
+        ${splitBadgeHtml}
         ${o.paid !== 1
           ? `<button class="btn btn-danger" style="padding:.2rem .5rem;font-size:.75rem" onclick="adminDeleteTicket(${o.id},${t.id},this)">🗑</button>`
           : `<span class="badge badge-muted" style="font-size:.7rem">bezahlt</span>`
         }
-      </div>`
-    ).join('');
+      </div>`;
+    }).join('');
+
+    const splitIcon = o.split_payment
+      ? `<span title="Separat-Zahlung" style="margin-left:.4rem;font-size:.8rem">💳</span>`
+      : '';
+
     return `<tr>
       <td><span class="badge badge-muted" title="Bestellungs-ID">#${o.id}</span></td>
       <td><strong>${esc(o.person_name)}</strong></td>
       <td><code>${esc(o.person_code)}</code></td>
-      <td style="min-width:200px">${ticketRows || '–'}</td>
-      <td>${fmt(o.total_eur)}</td>
+      <td style="min-width:220px">${ticketRows || '–'}</td>
+      <td>${fmt(o.total_eur)}${splitIcon}</td>
       <td>${paidBadge(o)}</td>
       <td style="font-size:.82rem;color:var(--muted)">${esc(o.created_at?.slice(0,16)||'')}</td>
       <td>${o.paid !== 1
@@ -362,8 +386,12 @@ function setupCsvUpload() {
     try {
       const res  = await fetch('/api/admin/upload-statement', { method: 'POST', body: form });
       const data = await res.json();
-      if (res.ok) { showAlert('csvUploadAlert', `✅ ${data.inserted} neue Zahlung(en), ${data.matched} zugeordnet.`, 'success'); loadPayments(); loadStats(); loadOrders(); loadDashUnpaid(); }
-      else { showAlert('csvUploadAlert', data.error || 'Fehler beim Verarbeiten.'); }
+      if (res.ok) {
+        let msg = `✅ ${data.inserted} neue Zahlung(en), ${data.matched} zugeordnet.`;
+        if (data.splitPaid > 0) msg += ` ${data.splitPaid} Einzel-Ticket(s) als bezahlt markiert.`;
+        showAlert('csvUploadAlert', msg, 'success');
+        loadPayments(); loadStats(); loadOrders(); loadDashUnpaid();
+      } else { showAlert('csvUploadAlert', data.error || 'Fehler beim Verarbeiten.'); }
     } catch { showAlert('csvUploadAlert', 'Verbindungsfehler.'); }
     finally { setBtn('csvUploadBtn', false, 'Hochladen &amp; prüfen'); }
   });
