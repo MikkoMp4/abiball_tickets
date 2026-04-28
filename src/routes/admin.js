@@ -86,6 +86,17 @@ function makeColIdx(header) {
   };
 }
 
+/**
+ * Extrahiert den Abiball-Code aus einem Verwendungszweck-String.
+ * Codes haben das Format XXXX-XXXX (z.B. XQPM-NTZF), der Verwendungszweck
+ * lautet dann ABIBALL-XQPM-NTZF. Der Regex muss also Bindestriche im Code erlauben.
+ */
+function extractAbiballCode(ref) {
+  // Matches ABIBALL- followed by the code which may contain hyphens (e.g. XQPM-NTZF)
+  const m = ref.match(/ABIBALL-([A-Z0-9]{4}-[A-Z0-9]{4}|[A-Z0-9]{4,12})/);
+  return m ? m[1] : null;
+}
+
 router.post('/generate-codes', (req, res) => {
   const { persons } = req.body;
   if (!Array.isArray(persons) || !persons.length) return res.status(400).json({ error: 'persons-Array erforderlich' });
@@ -167,8 +178,8 @@ router.post('/upload-pdf', pdfUpload.array('pdfs', 20), async (req, res) => {
 
     for (const tx of transactions) {
       const ref    = tx.reference.toUpperCase();
-      const match  = ref.match(/ABIBALL-([A-Z0-9]{4,12})/);
-      const person = match ? db.prepare('SELECT * FROM persons WHERE code = ?').get(match[1]) : null;
+      const code   = extractAbiballCode(ref);
+      const person = code ? db.prepare('SELECT * FROM persons WHERE code = ?').get(code) : null;
       const order  = person ? db.prepare('SELECT * FROM orders WHERE person_id = ? AND submitted = 1 ORDER BY id DESC LIMIT 1').get(person.id) : null;
 
       if (person && order && tx.amount !== null) {
@@ -224,14 +235,14 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
 
       if (refCol === -1 || amtCol === -1) {
         return res.status(400).json({
-          error: `CSV-Format nicht erkannt: Spalten "Verwendungszweck" und "Betrag" werden benötigt. Erkannte Spalten: ${header.join(', ')}`,
+          error: `CSV-Format nicht erkannt: Spalten "Verwendungszweck" und "Betrag" werden ben\u00f6tigt. Erkannte Spalten: ${header.join(', ')}`,
         });
       }
 
       for (let i = headerLine + 1; i < lines.length; i++) {
         const cols = lines[i].split(sep);
         const clean = (idx) => (idx !== -1 && cols[idx] !== undefined) ? cols[idx].replace(/^"|"$/g, '').trim() : '';
-        const rawAmt = clean(amtCol).replace(/€/g, '').replace(/\./g, '').replace(',', '.').replace(/\s+/g, '');
+        const rawAmt = clean(amtCol).replace(/\u20ac/g, '').replace(/\./g, '').replace(',', '.').replace(/\s+/g, '');
         const amount = parseFloat(rawAmt);
         if (isNaN(amount)) continue;
 
@@ -246,7 +257,7 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(req.file.buffer);
       const ws = workbook.worksheets[0];
-      if (!ws) return res.status(400).json({ error: 'Excel-Datei enthält kein Worksheet' });
+      if (!ws) return res.status(400).json({ error: 'Excel-Datei enth\u00e4lt kein Worksheet' });
 
       let headerRowNum = 1;
       ws.eachRow((row, rowNum) => {
@@ -267,13 +278,13 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
       const amtCol  = colIdx(['betrag', 'amount', 'umsatz', 'wert']);
 
       if (refCol === -1 || amtCol === -1) {
-        return res.status(400).json({ error: 'Excel-Format nicht erkannt: Spalten "Verwendungszweck" und "Betrag" werden benötigt.' });
+        return res.status(400).json({ error: 'Excel-Format nicht erkannt: Spalten "Verwendungszweck" und "Betrag" werden ben\u00f6tigt.' });
       }
 
       ws.eachRow((row, rowNum) => {
         if (rowNum <= headerRowNum) return;
         const get = (idx) => idx !== -1 ? String(row.getCell(idx).value || '').trim() : '';
-        const rawAmt = get(amtCol).replace(/€/g, '').replace(/\./g, '').replace(',', '.').replace(/\s+/g, '');
+        const rawAmt = get(amtCol).replace(/\u20ac/g, '').replace(/\./g, '').replace(',', '.').replace(/\s+/g, '');
         const amount = parseFloat(rawAmt);
         if (isNaN(amount)) return;
         rows.push({
@@ -295,8 +306,8 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
 
   for (const row of rows) {
     const ref   = (row.reference || '').toUpperCase();
-    const match = ref.match(/ABIBALL-([A-Z0-9]{4,12})/);
-    const person = match ? db.prepare('SELECT * FROM persons WHERE code = ?').get(match[1]) : null;
+    const code  = extractAbiballCode(ref);
+    const person = code ? db.prepare('SELECT * FROM persons WHERE code = ?').get(code) : null;
     const order  = person ? db.prepare('SELECT * FROM orders WHERE person_id = ? AND submitted = 1 ORDER BY id DESC LIMIT 1').get(person.id) : null;
 
     if (person && order && !isNaN(row.amount_eur)) {
@@ -384,7 +395,8 @@ router.post('/orders/:orderId/ticket/:ticketId/mark-paid', async (req, res) => {
       await sendSingleTicketEmail({ to: updatedTicket.ticket_email, personName: updatedTicket.ticket_name, qrBuffer, updated: false });
       emailResult = { ok: true, sentTo: updatedTicket.ticket_email };
     } catch (err) {
-      emailResult = { ok: false, error: err.message }; }
+      emailResult = { ok: false, error: err.message };
+    }
   }
 
   res.json({ ok: true, newPaidStatus: updatedOrder.paid, email: emailResult });
