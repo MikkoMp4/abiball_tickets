@@ -199,9 +199,10 @@ router.post('/order/:orderId/add', async (req, res) => {
   const order = db.prepare('SELECT * FROM orders WHERE id = ? AND person_id = ?').get(orderId, person.id);
   if (!order) return res.status(403).json({ error: 'Keine Berechtigung' });
 
-  if (order.paid === 1)
-    return res.status(409).json({ error: 'paid_order', message: 'Bezahlte Bestellungen können nicht erweitert werden.' });
-
+  // FIX: Block only if ALL ticket slots are used up.
+  // Do NOT block based on order.paid — a person may have paid for 1 ticket
+  // and still have remaining slots to fill (e.g. num_tickets=2, ordered 1 so far).
+  // Only block adding when the order is fully paid AND all slots are already used.
   const existing = db.prepare('SELECT COUNT(*) AS cnt FROM order_tickets WHERE order_id = ?').get(orderId);
   if (existing.cnt >= person.num_tickets)
     return res.status(409).json({ error: 'limit_reached', message: `Du hast bereits ${person.num_tickets} Ticket(s) bestellt – das ist dein Maximum.` });
@@ -225,6 +226,15 @@ router.post('/order/:orderId/add', async (req, res) => {
       'INSERT INTO order_tickets (order_id, ticket_name, ticket_email, split_ref, split_epc_blob) VALUES (?, ?, ?, ?, ?)'
     ).run(orderId, ticketName.trim(), ticketEmail.trim(), splitRef, splitEpcBlob);
     db.prepare('UPDATE orders SET total_eur = total_eur + ? WHERE id = ?').run(ticketPrice, orderId);
+    // FIX: If the order was marked fully paid (paid=1) but a new unpaid ticket
+    // is being added, downgrade to partial (paid=2) so the unpaid ticket is visible.
+    db.prepare(`
+      UPDATE orders SET paid = CASE
+        WHEN paid = 1 THEN 2
+        ELSE paid
+      END
+      WHERE id = ?
+    `).run(orderId);
   })();
 
   const newTotal  = db.prepare('SELECT total_eur FROM orders WHERE id = ?').get(orderId).total_eur;
@@ -432,19 +442,4 @@ router.post('/validate', (req, res) => {
   });
 });
 
-// ── GET /api/tickets/order/:personId (legacy) ─────────────────────────────────────────────────
-/*
-router.get('/order/:personId', async (req, res) => {
-  const db    = getDb();
-  const order = db.prepare(
-    'SELECT * FROM orders WHERE person_id = ? AND submitted = 1 ORDER BY id DESC LIMIT 1'
-  ).get(req.params.personId);
-  if (!order) return res.status(404).json({ error: 'Keine Bestellung gefunden' });
-  const tickets = db.prepare('SELECT * FROM order_tickets WHERE order_id = ?').all(order.id);
-  let epcQr = null;
-  if (order.epc_blob) epcQr = await generateQrDataUrl(order.epc_blob);
-  res.json({ order, tickets, epcQr });
-});
-*/
 module.exports = router;
-
