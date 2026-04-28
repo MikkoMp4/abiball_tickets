@@ -32,7 +32,7 @@ router.get('/config', (req, res) => {
 
 // ── POST /api/tickets/order ─────────────────────────────────────────────────────────
 router.post('/order', async (req, res) => {
-  const { personId, tickets } = req.body;
+  const { personId, code, tickets } = req.body;
   if (!personId || !Array.isArray(tickets) || tickets.length === 0)
     return res.status(400).json({ error: 'personId und tickets erforderlich' });
 
@@ -53,8 +53,8 @@ router.post('/order', async (req, res) => {
     accountName: s.bank_name  || '',
   };
 
-  const person = db.prepare('SELECT * FROM persons WHERE id = ?').get(personId);
-  if (!person) return res.status(404).json({ error: 'Person nicht gefunden' });
+  const person = db.prepare('SELECT * FROM persons WHERE id = ? AND code = ?').get(personId, (code || '').trim().toUpperCase());
+  if (!person) return res.status(403).json({ error: 'Ungültiger Code oder Person' });
 
   if (tickets.length > person.num_tickets)
     return res.status(400).json({ error: `Zu viele Tickets. Maximal ${person.num_tickets} erlaubt.` });
