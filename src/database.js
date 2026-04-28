@@ -1,70 +1,59 @@
 /**
- * database.js – SQLite-Datenbank-Initialisierung & Schema-Migrationen
+ * database.js – SQLite-Datenbankinitialisierung
  */
 const Database = require('better-sqlite3');
 const path     = require('path');
 const fs       = require('fs');
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'tickets.db');
-let   db;
+// DATA_DIR kommt aus .env (z.B. DATA_DIR=/app), DB-Datei liegt darin
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..');
+const DB_PATH  = process.env.DB_PATH  || path.join(DATA_DIR, 'abiball.sqlite');
+
+let db;
 
 function getDb() {
-  if (!db) {
-    const dir = path.dirname(DB_PATH);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    initSchema(db);
-  }
-  return db;
-}
+  if (db) return db;
 
-function initSchema(db) {
-  // ── persons
+  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+  db = new Database(DB_PATH);
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS persons (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       name        TEXT    NOT NULL,
-      email       TEXT,
+      email       TEXT    NOT NULL DEFAULT '',
       code        TEXT    NOT NULL UNIQUE,
       num_tickets INTEGER NOT NULL DEFAULT 1,
       created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     );
-  `);
 
-  // ── orders
-  db.exec(`
     CREATE TABLE IF NOT EXISTS orders (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       person_id   INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
-      total_eur   REAL    NOT NULL DEFAULT 0,
+      submitted   INTEGER NOT NULL DEFAULT 0,
       paid        INTEGER NOT NULL DEFAULT 0,
       paid_amount REAL    NOT NULL DEFAULT 0,
       paid_at     TEXT,
-      submitted   INTEGER NOT NULL DEFAULT 0,
+      total_eur   REAL    NOT NULL DEFAULT 0,
+      epc_blob    TEXT,
       created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     );
-  `);
 
-  // ── order_tickets
-  db.exec(`
     CREATE TABLE IF NOT EXISTS order_tickets (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       order_id     INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
       ticket_name  TEXT    NOT NULL,
-      ticket_email TEXT,
+      ticket_email TEXT    NOT NULL DEFAULT '',
       extra_info   TEXT,
       created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
     );
-  `);
 
-  // ── payments
-  db.exec(`
     CREATE TABLE IF NOT EXISTS payments (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       person_id    INTEGER REFERENCES persons(id) ON DELETE SET NULL,
-      amount_eur   REAL    NOT NULL,
+      amount_eur   REAL,
       reference    TEXT,
       sender_name  TEXT,
       booking_date TEXT,
@@ -73,76 +62,69 @@ function initSchema(db) {
       created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
       UNIQUE(booking_date, reference, amount_eur)
     );
-  `);
 
-  // ── settings
-  db.exec(`
     CREATE TABLE IF NOT EXISTS settings (
       key   TEXT PRIMARY KEY,
-      value TEXT
+      value TEXT NOT NULL DEFAULT ''
     );
   `);
 
-  // ── Migrations: neue Spalten nachrüsten
-  const columnMigrations = [
-    { table: 'orders',        col: 'split_payment',    sql: 'ALTER TABLE orders ADD COLUMN split_payment INTEGER NOT NULL DEFAULT 0' },
-    { table: 'order_tickets', col: 'split_ref',        sql: 'ALTER TABLE order_tickets ADD COLUMN split_ref TEXT' },
-    { table: 'order_tickets', col: 'split_ticket_num', sql: 'ALTER TABLE order_tickets ADD COLUMN split_ticket_num INTEGER' },
-    { table: 'order_tickets', col: 'split_epc_blob',   sql: 'ALTER TABLE order_tickets ADD COLUMN split_epc_blob TEXT' },
-    { table: 'order_tickets', col: 'split_paid_at',    sql: 'ALTER TABLE order_tickets ADD COLUMN split_paid_at TEXT' },
-    { table: 'order_tickets', col: 'split_amount',     sql: 'ALTER TABLE order_tickets ADD COLUMN split_amount REAL' },
-    // qr_token ohne UNIQUE (SQLite-Limitierung), Index separat
-    { table: 'order_tickets', col: 'qr_token',     sql: 'ALTER TABLE order_tickets ADD COLUMN qr_token TEXT' },
-    { table: 'order_tickets', col: 'qr_issued_at', sql: 'ALTER TABLE order_tickets ADD COLUMN qr_issued_at TEXT' },
-  ];
-
-  for (const m of columnMigrations) {
-    try {
-      const exists = db.prepare(
-        'SELECT COUNT(*) AS c FROM pragma_table_info(?) WHERE name = ?'
-      ).get(m.table, m.col);
-      if (exists.c === 0) db.exec(m.sql);
-    } catch { /* Spalte existiert bereits */ }
+  function hasColumn(table, column) {
+    return db.prepare(`PRAGMA table_info(${table})`).all().some(r => r.name === column);
   }
 
-  // UNIQUE-Index für qr_token
-  try {
-    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_order_tickets_qr_token ON order_tickets (qr_token) WHERE qr_token IS NOT NULL');
-  } catch { /* bereits vorhanden */ }
+  // Migrations
+  if (!hasColumn('orders', 'split_payment'))
+    db.exec('ALTER TABLE orders ADD COLUMN split_payment INTEGER NOT NULL DEFAULT 0');
+  if (!hasColumn('orders', 'paid_amount'))
+    db.exec('ALTER TABLE orders ADD COLUMN paid_amount REAL NOT NULL DEFAULT 0');
+  if (!hasColumn('order_tickets', 'split_ref'))
+    db.exec('ALTER TABLE order_tickets ADD COLUMN split_ref TEXT');
+  if (!hasColumn('order_tickets', 'split_ticket_num'))
+    db.exec('ALTER TABLE order_tickets ADD COLUMN split_ticket_num INTEGER');
+  if (!hasColumn('order_tickets', 'split_epc_blob'))
+    db.exec('ALTER TABLE order_tickets ADD COLUMN split_epc_blob TEXT');
+  if (!hasColumn('order_tickets', 'split_paid_at'))
+    db.exec('ALTER TABLE order_tickets ADD COLUMN split_paid_at TEXT');
+  if (!hasColumn('order_tickets', 'split_amount'))
+    db.exec('ALTER TABLE order_tickets ADD COLUMN split_amount REAL');
+  if (!hasColumn('order_tickets', 'qr_token'))
+    db.exec('ALTER TABLE order_tickets ADD COLUMN qr_token TEXT');
+  if (!hasColumn('order_tickets', 'qr_issued_at'))
+    db.exec('ALTER TABLE order_tickets ADD COLUMN qr_issued_at TEXT');
 
-  // ── Settings aus Env-Vars seeden (nur wenn der Key noch NICHT in der DB steht)
-  // Werte die bereits manuell in der Admin-UI gespeichert wurden, werden NICHT überschrieben.
+  // UNIQUE-Index für qr_token (separat, da SQLite kein UNIQUE bei ALTER TABLE erlaubt)
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_order_tickets_qr_token ON order_tickets (qr_token) WHERE qr_token IS NOT NULL');
+
+  // Settings aus Env-Vars seeden (nur wenn Key noch nicht existiert)
+  const insertIfMissing = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   const envDefaults = [
-    { key: 'bank_iban',      env: 'BANK_IBAN' },
-    { key: 'bank_bic',       env: 'BANK_BIC' },
-    { key: 'bank_name',      env: 'BANK_NAME' },
-    { key: 'ticket_price',   env: 'TICKET_PRICE' },
-    { key: 'event_name',     env: 'EVENT_NAME' },
-    { key: 'event_date',     env: 'EVENT_DATE' },
-    { key: 'event_location', env: 'EVENT_LOCATION' },
+    ['bank_iban',      process.env.BANK_IBAN],
+    ['bank_bic',       process.env.BANK_BIC],
+    ['bank_name',      process.env.BANK_NAME],
+    ['ticket_price',   process.env.TICKET_PRICE],
+    ['event_name',     process.env.EVENT_NAME],
+    ['event_date',     process.env.EVENT_DATE],
+    ['event_location', process.env.EVENT_LOCATION],
   ];
-
-  const insertIfMissing = db.prepare(
-    'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)'
-  );
-
-  for (const { key, env } of envDefaults) {
-    const val = process.env[env];
-    if (val !== undefined && val !== '') {
-      insertIfMissing.run(key, val);
-    }
+  for (const [key, val] of envDefaults) {
+    if (val) insertIfMissing.run(key, val);
   }
+
+  console.log(`[DB] Using database at: ${DB_PATH}`);
+  return db;
 }
 
 function getSettings() {
-  const db   = getDb();
-  const rows = db.prepare('SELECT key, value FROM settings').all();
+  const d    = getDb();
+  const rows = d.prepare('SELECT key, value FROM settings').all();
   return Object.fromEntries(rows.map(r => [r.key, r.value]));
 }
 
 function setSetting(key, value) {
-  const db = getDb();
-  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, String(value));
+  getDb().prepare(
+    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+  ).run(key, String(value));
 }
 
 module.exports = { getDb, getSettings, setSetting };
