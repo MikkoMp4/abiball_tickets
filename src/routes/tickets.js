@@ -433,6 +433,7 @@ router.post('/validate', (req, res) => {
 });
 
 // ── GET /api/tickets/order/:personId (legacy) ─────────────────────────────────────────────────
+/*
 router.get('/order/:personId', async (req, res) => {
   const db    = getDb();
   const order = db.prepare(
@@ -446,3 +447,4 @@ router.get('/order/:personId', async (req, res) => {
 });
 
 module.exports = router;
+*/
