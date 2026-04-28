@@ -73,11 +73,17 @@ function getDb() {
     return db.prepare(`PRAGMA table_info(${table})`).all().some(r => r.name === column);
   }
 
-  // Migrations
+  // ── Column Migrations ──────────────────────────────────────────────────────
   if (!hasColumn('orders', 'split_payment'))
     db.exec('ALTER TABLE orders ADD COLUMN split_payment INTEGER NOT NULL DEFAULT 0');
   if (!hasColumn('orders', 'paid_amount'))
     db.exec('ALTER TABLE orders ADD COLUMN paid_amount REAL NOT NULL DEFAULT 0');
+
+  // FIX: ticket_email war im ursprünglichen CREATE TABLE nicht vorhanden –
+  // bestehende DBs haben die Spalte nicht und zeigen deswegen keine Tickets an.
+  if (!hasColumn('order_tickets', 'ticket_email'))
+    db.exec("ALTER TABLE order_tickets ADD COLUMN ticket_email TEXT NOT NULL DEFAULT ''");
+
   if (!hasColumn('order_tickets', 'split_ref'))
     db.exec('ALTER TABLE order_tickets ADD COLUMN split_ref TEXT');
   if (!hasColumn('order_tickets', 'split_ticket_num'))
@@ -92,14 +98,26 @@ function getDb() {
     db.exec('ALTER TABLE order_tickets ADD COLUMN qr_token TEXT');
   if (!hasColumn('order_tickets', 'qr_issued_at'))
     db.exec('ALTER TABLE order_tickets ADD COLUMN qr_issued_at TEXT');
-  // FIX: ticket_paid war in migrations vergessen
   if (!hasColumn('order_tickets', 'ticket_paid'))
     db.exec('ALTER TABLE order_tickets ADD COLUMN ticket_paid INTEGER NOT NULL DEFAULT 0');
 
-  // UNIQUE-Index für qr_token (separat, da SQLite kein UNIQUE bei ALTER TABLE erlaubt)
+  // UNIQUE-Index für qr_token
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_order_tickets_qr_token ON order_tickets (qr_token) WHERE qr_token IS NOT NULL');
 
-  // Settings aus Env-Vars seeden (nur wenn Key noch nicht existiert)
+  // ── Data Migrations ────────────────────────────────────────────────────────
+
+  // FIX: Orders die mit submitted=0 angelegt wurden (alter Code-Stand oder direkte
+  // DB-Inserts) aber bereits Tickets haben → als submitted markieren damit sie im
+  // Admin-Tab und bei recalcPaymentStatus sichtbar sind.
+  const backfilled = db.prepare(`
+    UPDATE orders SET submitted = 1
+    WHERE submitted = 0
+      AND EXISTS (SELECT 1 FROM order_tickets ot WHERE ot.order_id = orders.id)
+  `).run();
+  if (backfilled.changes > 0)
+    console.log(`[DB] Backfilled ${backfilled.changes} order(s) from submitted=0 to submitted=1`);
+
+  // ── Settings aus Env-Vars seeden ───────────────────────────────────────────
   const insertIfMissing = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   const envDefaults = [
     ['bank_iban',      process.env.BANK_IBAN],
