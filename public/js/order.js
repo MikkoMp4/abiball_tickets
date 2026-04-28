@@ -329,6 +329,18 @@ function injectManageStyles() {
       font-weight: 500;
     }
 
+    /* ── Add-ticket notice (paid order) ── */
+    .add-paid-notice {
+      background: var(--warning-bg);
+      color: var(--warning);
+      border: 1.5px solid rgba(230,81,0,.2);
+      border-radius: var(--radius);
+      padding: .65rem .9rem;
+      font-size: .82rem;
+      margin-bottom: .85rem;
+      font-weight: 500;
+    }
+
     /* ── Divider ── */
     .pay-divider {
       border: none;
@@ -656,8 +668,10 @@ function renderQrPane(data) {
 
 // ── Tab: Angaben ändern ───────────────────────────────────────────────────
 function renderEditPane(data) {
-  const pane   = document.getElementById('m-edit');
-  const canAdd = data.order.paid !== 1 && data.remainingSlots > 0;
+  const pane      = document.getElementById('m-edit');
+  const fullyPaid = data.order.paid === 1;
+  // Show "Ticket hinzufügen" whenever there are remaining slots, regardless of paid status
+  const canAdd    = data.remainingSlots > 0;
 
   pane.innerHTML = `
     <div id="manageAlertBox" style="margin-bottom:.75rem"></div>
@@ -671,6 +685,7 @@ function renderEditPane(data) {
     ${canAdd ? `
       <div id="addTicketForm" class="add-form" style="display:none">
         <h4>Neues Ticket</h4>
+        ${fullyPaid ? `<div class="add-paid-notice">⚠️ Deine Bestellung wurde bereits bezahlt. Das neue Ticket muss separat überwiesen werden – du erhältst nach Zahlungseingang automatisch den QR-Code per E-Mail.</div>` : ''}
         <div class="edit-form-row">
           <div class="form-group" style="margin-bottom:0">
             <label>Name</label>
@@ -726,7 +741,7 @@ async function addTicket() {
   const ticketEmail = emailInput.value.trim();
 
   if (!ticketName) { feedback.innerHTML = '<span class="feedback-err">Name darf nicht leer sein.</span>'; return; }
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ticketEmail)) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ticketEmail)) {
     feedback.innerHTML = '<span class="feedback-err">Ungültige E-Mail-Adresse.</span>'; return;
   }
 
@@ -753,7 +768,25 @@ async function addTicket() {
     document.getElementById('addTicketForm').style.display = 'none';
     document.getElementById('addTicketBtn').style.display  = '';
     renderTicketList(currentTickets, false);
-    showAlert(document.getElementById('manageAlertBox'), 'Ticket erfolgreich hinzugefügt.', 'success');
+
+    // Reload manage view so payment tab reflects updated total & paid status
+    const freshRes  = await fetch(`/api/tickets/my-order?code=${encodeURIComponent(code)}`);
+    const freshData = await freshRes.json();
+    if (freshRes.ok) {
+      currentOrder   = freshData.order;
+      currentTickets = freshData.tickets;
+      renderManage(freshData);
+      // Switch back to edit tab
+      paymentCard.querySelectorAll('.m-tab').forEach(b => b.classList.remove('active'));
+      paymentCard.querySelectorAll('.m-pane').forEach(p => p.classList.remove('active'));
+      const editTab = paymentCard.querySelector('[data-pane="edit"]');
+      if (editTab) {
+        editTab.classList.add('active');
+        document.getElementById('m-edit').classList.add('active');
+      }
+    }
+
+    showAlert(document.getElementById('manageAlertBox'), '✅ Ticket erfolgreich hinzugefügt. Bitte überweise den ausstehenden Betrag.', 'success');
   } catch {
     feedback.innerHTML = '<span class="feedback-err">Verbindungsfehler.</span>';
   } finally {
@@ -856,7 +889,7 @@ async function saveTicket(div, ticket) {
   const ticketEmail = emailInput.value.trim();
 
   if (!ticketName) { feedback.innerHTML = '<span class="feedback-err">Name darf nicht leer sein.</span>'; return; }
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ticketEmail)) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ticketEmail)) {
     feedback.innerHTML = '<span class="feedback-err">Ungültige E-Mail-Adresse.</span>'; return;
   }
 
@@ -944,7 +977,7 @@ function updateTotal() {
 submitBtn.addEventListener('click', async () => {
   alertBox.innerHTML = '';
   const tickets = [];
-  const emailRe = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   for (const form of ticketForms.querySelectorAll('.card')) {
     const nameInput  = form.querySelector('[name=ticketName]');
