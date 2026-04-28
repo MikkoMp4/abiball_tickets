@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Abiball 2026 – Admin</title>
+  <title>Abiball – Admin</title>
   <link rel="stylesheet" href="/css/style.css">
   <style>
     /* ── Login Overlay ───────────────────────────────────────────── */
@@ -183,7 +183,7 @@
 <div id="adminContent">
 
 <nav class="topbar">
-  <h1>🎓 Abiball 2026 – Admin</h1>
+  <h1>Abiball – Admin</h1>
   <div class="nav-links">
     <a href="/">Ticketkauf</a>
     <button id="logoutBtn" style="background:none;border:none;color:inherit;cursor:pointer;font-size:.9rem;padding:.25rem .5rem;opacity:.75">Abmelden</button>
@@ -194,11 +194,11 @@
 
   <!-- Tabs – 3-column grid on mobile, 6-column on desktop -->
   <div class="tabs">
-    <button class="tab-btn active" data-tab="dashboard">📊 Übersicht</button>
-    <button class="tab-btn" data-tab="payments">💳 Zahlungen</button>
-    <button class="tab-btn" data-tab="orders">🎟 Bestellungen</button>
-    <button class="tab-btn" data-tab="persons">👥 Personen</button>
-    <button class="tab-btn" data-tab="settings">⚙️ Einstellungen</button>
+    <button class="tab-btn active" data-tab="dashboard">Übersicht</button>
+    <button class="tab-btn" data-tab="payments">Zahlungen</button>
+    <button class="tab-btn" data-tab="orders">Bestellungen</button>
+    <button class="tab-btn" data-tab="persons">Personen</button>
+    <button class="tab-btn" data-tab="settings">Einstellungen</button>
     <button class="tab-btn" data-tab="danger">⚠️ Danger</button>
   </div>
 
@@ -215,7 +215,7 @@
       <div class="stat-card"><div class="stat-value" id="st-payments">–</div><div class="stat-label">Zahlungseingänge</div></div>
     </div>
     <div class="card">
-      <h2>⏳ Offene Zahlungen (noch nicht bezahlt)</h2>
+      <h2>Offene Zahlungen (noch nicht bezahlt)</h2>
       <div id="dashUnpaidAlert"></div>
       <div style="overflow-x:auto">
         <table><thead><tr><th>Person</th><th>Code</th><th>Tickets</th><th>Betrag</th><th>Bestellt am</th></tr></thead>
@@ -228,25 +228,25 @@
   <!-- ── TAB: Zahlungen ────────────────────────────────────────────────── -->
   <div class="tab-pane" id="tab-payments">
     <div class="card" style="border:2px solid var(--primary)">
-      <h2>📄 Kontoauszug als PDF hochladen <span class="badge badge-primary" style="font-size:.75rem;vertical-align:middle">Empfohlen</span></h2>
+      <h2>Kontoauszug als PDF hochladen <span class="badge badge-primary" style="font-size:.75rem;vertical-align:middle">Empfohlen</span></h2>
       <div id="pdfUploadAlert"></div>
       <p style="font-size:.9rem;color:var(--muted);margin-bottom:1rem">Lade eine oder mehrere Bank-PDF-Dateien hoch. Das System sucht automatisch nach Abiball-Referenznummern und gleicht die Beträge ab.</p>
       <div class="form-group"><label for="pdfFiles">PDF-Dateien (max. 20 Dateien, je max. 20 MB)</label><input type="file" id="pdfFiles" accept=".pdf" multiple></div>
       <button class="btn btn-primary" id="pdfUploadBtn">📤 PDFs hochladen &amp; abgleichen</button>
     </div>
     <div class="card">
-      <h2>📊 Kontoauszug als CSV hochladen</h2>
+      <h2>Kontoauszug als CSV hochladen</h2>
       <div id="csvUploadAlert"></div>
       <div class="form-group"><label for="statementFile">CSV-Datei (max. 5 MB)</label><input type="file" id="statementFile" accept=".csv,.txt"></div>
       <button class="btn btn-outline-dark" id="csvUploadBtn">Hochladen &amp; prüfen</button>
     </div>
     <div class="card" id="pdfResultCard" style="display:none">
-      <h2>📋 Ergebnis der PDF-Verarbeitung</h2>
+      <h2>Ergebnis der PDF-Verarbeitung</h2>
       <div id="pdfResultContent"></div>
     </div>
     <div class="card">
-      <h2>💳 Zahlungsübersicht</h2>
-      <p style="font-size:.8rem;color:var(--muted);margin-bottom:.75rem">💡 Die <strong>ID</strong>-Spalte zeigt die Zahlungs-ID für die Danger Zone.</p>
+      <h2>Zahlungsübersicht</h2>
+      <p style="font-size:.8rem;color:var(--muted);margin-bottom:.75rem">Die <strong>ID</strong>-Spalte zeigt die Zahlungs-ID für die Danger Zone.</p>
       <div id="paymentsAlert"></div>
       <div style="overflow-x:auto">
         <table><thead><tr><th>ID</th><th>Datum</th><th>Absender</th><th>Verwendungszweck</th><th>Betrag</th><th>Zuordnung</th><th>Status</th><th></th></tr></thead>
@@ -259,8 +259,8 @@
   <!-- ── TAB: Bestellungen ──────────────────────────────────────────────── -->
   <div class="tab-pane" id="tab-orders">
     <div class="card">
-      <h2>🎟 Alle Bestellungen</h2>
-      <p style="font-size:.8rem;color:var(--muted);margin-bottom:.75rem">💡 Die <strong>ID</strong>-Spalte zeigt die Bestellungs-ID für die Danger Zone.</p>
+      <h2>Alle Bestellungen</h2>
+      <p style="font-size:.8rem;color:var(--muted);margin-bottom:.75rem">Die <strong>ID</strong>-Spalte zeigt die Bestellungs-ID für die Danger Zone.</p>
       <div id="ordersAlert"></div>
       <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1rem;align-items:center">
         <label style="font-weight:600;font-size:.9rem">Filter:</label>
@@ -301,8 +301,8 @@
       </div>
     </div>
     <div class="card">
-      <h2>📋 Alle Personen</h2>
-      <p style="font-size:.8rem;color:var(--muted);margin-bottom:.75rem">💡 Die <strong>ID</strong>-Spalte zeigt die Personen-ID für die Danger Zone.</p>
+      <h2>Alle Personen</h2>
+      <p style="font-size:.8rem;color:var(--muted);margin-bottom:.75rem">Die <strong>ID</strong>-Spalte zeigt die Personen-ID für die Danger Zone.</p>
       <div id="personsAlert"></div>
       <div style="overflow-x:auto">
         <table><thead><tr><th>ID</th><th>Name</th><th>Code</th><th># Tickets</th><th>Bestellt</th><th>Bezahlt</th><th>Erstellt</th><th></th></tr></thead>
@@ -315,7 +315,7 @@
   <!-- ── TAB: Einstellungen ───────────────────────────────────────────── -->
   <div class="tab-pane" id="tab-settings">
     <div class="card">
-      <h2>🎉 Veranstaltungsinfos</h2>
+      <h2>Veranstaltungsinfos</h2>
       <div id="settingsEventAlert"></div>
       <div class="settings-grid">
         <div class="form-group"><label for="s-event-name">Veranstaltungsname</label><input type="text" id="s-event-name" placeholder="Abiball 2026"></div>
@@ -326,7 +326,7 @@
       <button class="btn btn-primary" id="saveEventBtn">💾 Speichern</button>
     </div>
     <div class="card">
-      <h2>🏦 Bankverbindung</h2>
+      <h2>Bankverbindung</h2>
       <div id="settingsBankAlert"></div>
       <div class="settings-grid">
         <div class="form-group" style="grid-column:1/-1"><label for="s-bank-name">Kontoinhaber</label><input type="text" id="s-bank-name" placeholder="Abiturkomitee 2026"></div>
@@ -336,11 +336,11 @@
       <button class="btn btn-primary" id="saveBankBtn">💾 Speichern</button>
     </div>
     <div class="card">
-      <h2>🔍 Aktuelle Einstellungen (JSON)</h2>
+      <h2>Aktuelle Einstellungen (JSON)</h2>
       <pre id="settingsPreview" style="background:#f5f5f5;padding:1rem;border-radius:8px;font-size:.82rem;overflow-x:auto"></pre>
     </div>
     <div class="card">
-      <h2>🌍 Umgebungsvariablen-Status</h2>
+      <h2>Umgebungsvariablen-Status</h2>
       <div id="envStatusContent"></div>
     </div>
   </div>
@@ -352,12 +352,12 @@
       <p style="font-size:.9rem;color:#6b7280;margin-bottom:1.25rem">
         Alle Aktionen hier sind <strong>unwiderruflich</strong> und erfordern das separate Danger-Passwort.
         Nur für Test- und Debugzwecke verwenden.<br>
-        <span style="font-size:.82rem">💡 IDs findest du in den jeweiligen Übersichtstabellen (Personen / Bestellungen / Zahlungen).</span>
+        <span style="font-size:.82rem">IDs findest du in den jeweiligen Übersichtstabellen (Personen / Bestellungen / Zahlungen).</span>
       </p>
 
       <div class="danger-pw-row">
         <div>
-          <label for="dangerPwInput">🔑 Danger-Passwort</label>
+          <label for="dangerPwInput">Danger-Passwort</label>
           <input type="password" id="dangerPwInput" placeholder="Geheimes Passwort" autocomplete="off">
         </div>
       </div>
