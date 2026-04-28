@@ -80,106 +80,54 @@
       background: rgba(255,255,255,.28);
       color: #fff;
     }
-    /* Danger tab – always red-tinted */
     .tab-btn[data-tab="danger"] { color: #ffb3b3; }
     .tab-btn[data-tab="danger"].active { color: #b91c1c; }
 
     @media (min-width: 640px) {
-      .tabs {
-        grid-template-columns: repeat(6, 1fr);
-      }
+      .tabs { grid-template-columns: repeat(6, 1fr); }
     }
 
     /* ── Danger Zone styles ─────────────────────────────────────── */
     .danger-zone-card {
-      border: 2px solid #dc2626;
-      border-radius: 10px;
-      background: #fff5f5;
-      padding: 1.5rem;
-      margin-bottom: 1.25rem;
+      border: 2px solid #dc2626; border-radius: 10px;
+      background: #fff5f5; padding: 1.5rem; margin-bottom: 1.25rem;
     }
-    .danger-zone-card h2 {
-      color: #b91c1c;
-      display: flex; align-items: center; gap: .5rem;
-      margin-bottom: .75rem;
-    }
-    .danger-pw-row {
-      display: flex; gap: .75rem; flex-wrap: wrap;
-      align-items: flex-end; margin-bottom: 1.25rem;
-    }
+    .danger-zone-card h2 { color: #b91c1c; display: flex; align-items: center; gap: .5rem; margin-bottom: .75rem; }
+    .danger-pw-row { display: flex; gap: .75rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1.25rem; }
     .danger-pw-row label { font-weight: 600; font-size: .9rem; display: block; margin-bottom: .3rem; }
-    .danger-pw-row input {
-      padding: .55rem .9rem; border: 1.5px solid #fca5a5;
-      border-radius: 6px; font-size: .95rem; width: 200px;
-      background: #fff;
-    }
+    .danger-pw-row input { padding: .55rem .9rem; border: 1.5px solid #fca5a5; border-radius: 6px; font-size: .95rem; width: 200px; background: #fff; }
     .danger-pw-row input:focus { outline: none; border-color: #dc2626; }
     .danger-actions { display: flex; flex-direction: column; gap: 1rem; }
-    .danger-action-row {
-      display: flex; align-items: center; justify-content: space-between;
-      flex-wrap: wrap; gap: .75rem;
-      padding: .9rem 1rem;
-      background: #fff;
-      border: 1px solid #fecaca;
-      border-radius: 8px;
-    }
+    .danger-action-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; padding: .9rem 1rem; background: #fff; border: 1px solid #fecaca; border-radius: 8px; }
     .danger-action-row .action-info { flex: 1; min-width: 140px; }
     .danger-action-row .action-info strong { display: block; font-size: .95rem; color: #1f2937; }
     .danger-action-row .action-info span  { font-size: .82rem; color: #6b7280; }
     .danger-action-row .action-inputs { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
-    .danger-action-row input.id-input {
-      width: 90px; padding: .4rem .6rem;
-      border: 1px solid #ddd; border-radius: 6px;
-      font-size: .9rem;
-    }
-    .btn-danger-action {
-      padding: .45rem 1rem;
-      background: #dc2626; color: #fff;
-      border: none; border-radius: 6px;
-      font-weight: 600; font-size: .875rem;
-      cursor: pointer; transition: background .2s;
-      white-space: nowrap;
-      min-height: 44px;
-    }
+    .danger-action-row input.id-input { width: 90px; padding: .4rem .6rem; border: 1px solid #ddd; border-radius: 6px; font-size: .9rem; }
+    .btn-danger-action { padding: .45rem 1rem; background: #dc2626; color: #fff; border: none; border-radius: 6px; font-weight: 600; font-size: .875rem; cursor: pointer; transition: background .2s; white-space: nowrap; min-height: 44px; }
     .btn-danger-action:hover    { background: #b91c1c; }
     .btn-danger-action:disabled { opacity: .55; cursor: not-allowed; }
-    .btn-nuclear {
-      padding: .55rem 1.25rem;
-      background: #7f1d1d; color: #fff;
-      border: none; border-radius: 6px;
-      font-weight: 700; font-size: .9rem;
-      cursor: pointer; transition: background .2s;
-      width: 100%; min-height: 44px;
-    }
+    .btn-nuclear { padding: .55rem 1.25rem; background: #7f1d1d; color: #fff; border: none; border-radius: 6px; font-weight: 700; font-size: .9rem; cursor: pointer; transition: background .2s; width: 100%; min-height: 44px; }
     .btn-nuclear:hover    { background: #450a0a; }
     .btn-nuclear:disabled { opacity: .55; cursor: not-allowed; }
-    #dangerResult {
-      margin-top: 1rem;
-      padding: .75rem 1rem;
-      border-radius: 8px;
-      font-size: .9rem;
-      display: none;
-    }
+    #dangerResult { margin-top: 1rem; padding: .75rem 1rem; border-radius: 8px; font-size: .9rem; display: none; }
     #dangerResult.success { background: #f0fdf4; border: 1px solid #86efac; color: #166534; display: block; }
     #dangerResult.error   { background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; display: block; }
   </style>
 </head>
 <body>
 
-<!-- ── Login Overlay ───────────────────────────────────────────────────── -->
 <div id="loginOverlay">
   <div class="login-box">
     <div style="font-size:2.5rem;margin-bottom:.5rem">🎓</div>
     <h2>Admin-Bereich</h2>
     <p>Bitte Passwort eingeben</p>
     <div id="loginError"></div>
-    <input type="password" id="loginInput" placeholder="••••••••••"
-      maxlength="64" autocomplete="current-password" autofocus>
+    <input type="password" id="loginInput" placeholder="••••••••••" maxlength="64" autocomplete="current-password" autofocus>
     <button class="btn-login" id="loginBtn">Einloggen</button>
   </div>
 </div>
 
-<!-- ── Admin Content (hidden until auth) ───────────────────────────── -->
 <div id="adminContent">
 
 <nav class="topbar">
@@ -192,7 +140,6 @@
 
 <div class="container" style="max-width:1100px">
 
-  <!-- Tabs – 3-column grid on mobile, 6-column on desktop -->
   <div class="tabs">
     <button class="tab-btn active" data-tab="dashboard">Übersicht</button>
     <button class="tab-btn" data-tab="payments">Zahlungen</button>
@@ -207,19 +154,21 @@
     <div class="stats-grid" id="statsGrid">
       <div class="stat-card"><div class="stat-value" id="st-persons">–</div><div class="stat-label">Personen</div></div>
       <div class="stat-card"><div class="stat-value" id="st-orders">–</div><div class="stat-label">Bestellungen</div></div>
-      <div class="stat-card"><div class="stat-value" id="st-paid">–</div><div class="stat-label">Bezahlt</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-paid">–</div><div class="stat-label">Vollständig bezahlt</div></div>
+      <div class="stat-card" style="border-top:3px solid #f59e0b"><div class="stat-value" id="st-partial" style="color:#92400e">–</div><div class="stat-label">Teilweise bezahlt</div></div>
       <div class="stat-card"><div class="stat-value" id="st-unpaid">–</div><div class="stat-label">Ausstehend</div></div>
       <div class="stat-card"><div class="stat-value" id="st-tickets">–</div><div class="stat-label">Tickets gesamt</div></div>
-      <div class="stat-card"><div class="stat-value" id="st-revenue">–</div><div class="stat-label">Einnahmen</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-revenue">–</div><div class="stat-label">Einnahmen (voll)</div></div>
+      <div class="stat-card" style="border-top:3px solid #f59e0b"><div class="stat-value" id="st-partial-rev" style="color:#92400e">–</div><div class="stat-label">Einnahmen (Teil)</div></div>
       <div class="stat-card"><div class="stat-value" id="st-pending-rev">–</div><div class="stat-label">Offen (EUR)</div></div>
       <div class="stat-card"><div class="stat-value" id="st-payments">–</div><div class="stat-label">Zahlungseingänge</div></div>
     </div>
     <div class="card">
-      <h2>Offene Zahlungen (noch nicht bezahlt)</h2>
+      <h2>Offene &amp; teilweise bezahlte Bestellungen</h2>
       <div id="dashUnpaidAlert"></div>
       <div style="overflow-x:auto">
-        <table><thead><tr><th>Person</th><th>Code</th><th>Tickets</th><th>Betrag</th><th>Bestellt am</th></tr></thead>
-          <tbody id="dashUnpaidTbody"><tr><td colspan="5" style="text-align:center;color:var(--muted)">Lade…</td></tr></tbody>
+        <table><thead><tr><th>Person</th><th>Code</th><th>Tickets</th><th>Betrag</th><th>Status</th><th>Bestellt am</th></tr></thead>
+          <tbody id="dashUnpaidTbody"><tr><td colspan="6" style="text-align:center;color:var(--muted)">Lade…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -265,8 +214,11 @@
       <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1rem;align-items:center">
         <label style="font-weight:600;font-size:.9rem">Filter:</label>
         <select id="ordersFilter" style="padding:.4rem .7rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.9rem">
-          <option value="all">Alle</option><option value="paid">Bezahlt</option>
-          <option value="unpaid">Offen</option><option value="sent">QR gesendet</option>
+          <option value="all">Alle</option>
+          <option value="paid">Vollständig bezahlt</option>
+          <option value="partial">Teilweise bezahlt</option>
+          <option value="unpaid">Offen</option>
+          <option value="sent">QR gesendet</option>
         </select>
         <button class="btn btn-outline-dark" style="padding:.35rem .85rem;font-size:.85rem" onclick="loadOrders()">&#x1F504; Aktualisieren</button>
       </div>
@@ -285,11 +237,10 @@
       <div id="genAlert"></div>
       <p style="font-size:.9rem;color:var(--muted);margin-bottom:1rem">
         Füge pro Zeile eine Person ein: <code>Name; Anzahl Tickets</code><br>
-        Die E-Mail-Adresse wird von den Ticket-Inhabern selbst beim Bestellen eingegeben.<br>
         Beispiel: <code>Max Mustermann; 2</code>
       </p>
       <div class="form-group"><label for="personsBulk">Personen (eine pro Zeile)</label>
-        <textarea id="personsBulk" rows="8" placeholder="Max Mustermann; 2&#10;Erika Muster; 1&#10;Anna Schmidt; 3"></textarea>
+        <textarea id="personsBulk" rows="8" placeholder="Max Mustermann; 2&#10;Erika Muster; 1"></textarea>
       </div>
       <button class="btn btn-primary" id="generateBtn">Codes generieren</button>
     </div>
@@ -351,74 +302,52 @@
       <h2>⚠️ Danger Zone</h2>
       <p style="font-size:.9rem;color:#6b7280;margin-bottom:1.25rem">
         Alle Aktionen hier sind <strong>unwiderruflich</strong> und erfordern das separate Danger-Passwort.
-        Nur für Test- und Debugzwecke verwenden.<br>
-        <span style="font-size:.82rem">IDs findest du in den jeweiligen Übersichtstabellen (Personen / Bestellungen / Zahlungen).</span>
+        <br><span style="font-size:.82rem">IDs findest du in den jeweiligen Übersichtstabellen.</span>
       </p>
-
       <div class="danger-pw-row">
         <div>
           <label for="dangerPwInput">Danger-Passwort</label>
           <input type="password" id="dangerPwInput" placeholder="Geheimes Passwort" autocomplete="off">
         </div>
       </div>
-
       <div class="danger-actions">
-
-        <!-- Delete Person -->
         <div class="danger-action-row">
-          <div class="action-info">
-            <strong>Person löschen</strong>
-            <span>Löscht Person + alle Bestellungen, Tickets und Zahlungen dieser Person</span>
-          </div>
+          <div class="action-info"><strong>Person löschen</strong><span>Löscht Person + alle Bestellungen, Tickets und Zahlungen</span></div>
           <div class="action-inputs">
             <input type="number" id="dangerPersonId" class="id-input" placeholder="Person-ID" min="1">
             <button class="btn-danger-action" onclick="dangerDeletePerson()">🗑 Löschen</button>
           </div>
         </div>
-
-        <!-- Delete Order -->
         <div class="danger-action-row">
-          <div class="action-info">
-            <strong>Bestellung löschen</strong>
-            <span>Löscht eine einzelne Bestellung + alle zugehörigen Tickets</span>
-          </div>
+          <div class="action-info"><strong>Bestellung löschen</strong><span>Löscht eine einzelne Bestellung + alle zugehörigen Tickets</span></div>
           <div class="action-inputs">
             <input type="number" id="dangerOrderId" class="id-input" placeholder="Order-ID" min="1">
             <button class="btn-danger-action" onclick="dangerDeleteOrder()">🗑 Löschen</button>
           </div>
         </div>
-
-        <!-- Delete Payment -->
         <div class="danger-action-row">
-          <div class="action-info">
-            <strong>Zahlung löschen</strong>
-            <span>Löscht einen Zahlungseingang; setzt zugehörige Bestellung auf "unbezahlt" zurück</span>
-          </div>
+          <div class="action-info"><strong>Zahlung löschen</strong><span>Löscht einen Zahlungseingang; setzt Bezahlstatus neu</span></div>
           <div class="action-inputs">
             <input type="number" id="dangerPaymentId" class="id-input" placeholder="Payment-ID" min="1">
             <button class="btn-danger-action" onclick="dangerDeletePayment()">🗑 Löschen</button>
           </div>
         </div>
-
-        <!-- Nuclear -->
         <div class="danger-action-row" style="flex-direction:column;align-items:stretch">
           <div class="action-info" style="margin-bottom:.75rem">
             <strong style="color:#7f1d1d">☢️ Alle Daten löschen (Nuclear)</strong>
-            <span>Löscht ALLE Personen, Bestellungen, Tickets und Zahlungen. Nicht rückgängig zu machen.</span>
+            <span>Löscht ALLE Personen, Bestellungen, Tickets und Zahlungen.</span>
           </div>
-          <input type="text" id="dangerNuclearConfirm"
-            placeholder='Zur Bestätigung "ALLES LÖSCHEN" eingeben'
+          <input type="text" id="dangerNuclearConfirm" placeholder='Zur Bestätigung "ALLES LÖSCHEN" eingeben'
             style="width:100%;padding:.55rem .9rem;border:1.5px solid #fca5a5;border-radius:6px;font-size:.9rem;margin-bottom:.75rem;background:#fff">
           <button class="btn-nuclear" onclick="dangerNuclear()">☢️ ALLES LÖSCHEN</button>
         </div>
-
       </div>
       <div id="dangerResult"></div>
     </div>
   </div>
 
-</div><!-- /container -->
-</div><!-- /adminContent -->
+</div>
+</div>
 
 <script src="/js/admin.js"></script>
 </body>

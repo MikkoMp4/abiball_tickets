@@ -83,6 +83,26 @@ function setBtn(id, disabled, html) {
   btn.disabled = disabled; btn.innerHTML = html;
 }
 
+/**
+ * Gibt ein Badge-HTML fuer den Bezahlstatus einer Bestellung zurueck.
+ *   paid=0 → Ausstehend  (gelb)
+ *   paid=1 → Bezahlt     (gruen)
+ *   paid=2 → Teilzahlung (orange)
+ */
+function paidBadge(order) {
+  if (order.paid === 1) {
+    return `<span class="badge badge-success">✓ Bezahlt</span>` +
+           `<br><span style="font-size:.75rem;color:var(--muted)">${esc(order.paid_at?.slice(0,16)||'')}</span>`;
+  }
+  if (order.paid === 2) {
+    const paidAmt = fmt(order.paid_amount);
+    const total   = fmt(order.total_eur);
+    return `<span class="badge" style="background:#fff3cd;color:#856404;border:1px solid #ffc107">⚠️ Teilzahlung</span>` +
+           `<br><span style="font-size:.75rem;color:var(--muted)">${paidAmt} von ${total}</span>`;
+  }
+  return '<span class="badge badge-warning">Ausstehend</span>';
+}
+
 // ── Stats ─────────────────────────────────────────────────────────────────
 async function loadStats() {
   try {
@@ -92,9 +112,11 @@ async function loadStats() {
     document.getElementById('st-persons').textContent     = data.totalPersons;
     document.getElementById('st-orders').textContent      = data.totalOrders;
     document.getElementById('st-paid').textContent        = data.paidOrders;
+    document.getElementById('st-partial').textContent     = data.partialOrders ?? '–';
     document.getElementById('st-unpaid').textContent      = data.unpaidOrders;
     document.getElementById('st-tickets').textContent     = data.totalTickets;
     document.getElementById('st-revenue').textContent     = fmt(data.totalRevenue);
+    document.getElementById('st-partial-rev').textContent = fmt(data.partialRevenue);
     document.getElementById('st-pending-rev').textContent = fmt(data.pendingRevenue);
     document.getElementById('st-payments').textContent    = `${data.matchedPayments} / ${data.totalPayments}`;
   } catch { /* silent */ }
@@ -105,15 +127,17 @@ async function loadDashUnpaid() {
     const res  = await fetch('/api/admin/orders');
     if (res.status === 401) return;
     const data  = await res.json();
-    const unpaid = (data.orders || []).filter(o => !o.paid);
+    // Dashboard zeigt alle nicht vollstaendig bezahlten Bestellungen (offen + Teilzahlung)
+    const unpaid = (data.orders || []).filter(o => o.paid !== 1);
     const tbody  = document.getElementById('dashUnpaidTbody');
     if (!unpaid.length) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">Alle Bestellungen bezahlt 🎉</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">Alle Bestellungen vollständig bezahlt 🎉</td></tr>';
       return;
     }
     tbody.innerHTML = unpaid.map(o =>
       `<tr><td><strong>${esc(o.person_name)}</strong></td><td><code>${esc(o.person_code)}</code></td>` +
       `<td>${o.ticket_count}</td><td>${fmt(o.total_eur)}</td>` +
+      `<td>${paidBadge(o)}</td>` +
       `<td style="font-size:.82rem;color:var(--muted)">${esc(o.created_at?.slice(0,16)||'')}</td></tr>`
     ).join('');
   } catch { showAlert('dashUnpaidAlert', 'Fehler beim Laden.'); }
@@ -193,8 +217,9 @@ async function loadOrders() {
 function renderOrders(orders) {
   const filter = document.getElementById('ordersFilter')?.value || 'all';
   let filtered = orders;
-  if (filter === 'paid')   filtered = orders.filter(o => o.paid);
-  if (filter === 'unpaid') filtered = orders.filter(o => !o.paid);
+  if (filter === 'paid')    filtered = orders.filter(o => o.paid === 1);
+  if (filter === 'partial') filtered = orders.filter(o => o.paid === 2);
+  if (filter === 'unpaid')  filtered = orders.filter(o => o.paid === 0);
   const tbody = document.getElementById('ordersTbody');
   if (!filtered.length) {
     tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted)">Keine Bestellungen vorhanden.</td></tr>';
@@ -205,7 +230,7 @@ function renderOrders(orders) {
       `<div style="display:flex;align-items:center;gap:.5rem;padding:.25rem 0;border-bottom:1px solid #eee">
         <span style="font-size:.8rem;color:#777">T${i+1}</span>
         <span style="flex:1;font-size:.85rem">${esc(t.ticket_name)} &lt;${esc(t.ticket_email || '–')}&gt;</span>
-        ${!o.paid
+        ${o.paid !== 1
           ? `<button class="btn btn-danger" style="padding:.2rem .5rem;font-size:.75rem" onclick="adminDeleteTicket(${o.id},${t.id},this)">🗑</button>`
           : `<span class="badge badge-muted" style="font-size:.7rem">bezahlt</span>`
         }
@@ -217,11 +242,9 @@ function renderOrders(orders) {
       <td><code>${esc(o.person_code)}</code></td>
       <td style="min-width:200px">${ticketRows || '–'}</td>
       <td>${fmt(o.total_eur)}</td>
-      <td>${o.paid
-        ? `<span class="badge badge-success">✓ Bezahlt</span><br><span style="font-size:.75rem;color:var(--muted)">${esc(o.paid_at?.slice(0,16)||'')}</span>`
-        : '<span class="badge badge-warning">Ausstehend</span>'}</td>
+      <td>${paidBadge(o)}</td>
       <td style="font-size:.82rem;color:var(--muted)">${esc(o.created_at?.slice(0,16)||'')}</td>
-      <td>${!o.paid
+      <td>${o.paid !== 1
         ? `<button class="btn btn-success" style="padding:.3rem .7rem;font-size:.8rem" onclick="markPaid(${o.id},this)">✓ Als bezahlt markieren</button>`
         : ''}</td>
     </tr>`;
@@ -241,10 +264,6 @@ window.markPaid = async function(orderId, btn) {
   } catch { showAlert('ordersAlert', 'Verbindungsfehler.'); btn.disabled = false; btn.textContent = '✓ Als bezahlt markieren'; }
 };
 
-/**
- * Admin: Einzelnes Ticket aus einer Bestellung löschen.
- * Zeigt verständliche Fehlermeldungen für paid_order und last_ticket.
- */
 window.adminDeleteTicket = async function(orderId, ticketId, btn) {
   if (!confirm('Dieses Ticket wirklich löschen?')) return;
   btn.disabled = true; btn.innerHTML = '…';
@@ -255,18 +274,10 @@ window.adminDeleteTicket = async function(orderId, ticketId, btn) {
       showAlert('ordersAlert', `✅ Ticket gelöscht. Neuer Gesamtbetrag: ${fmt(data.newTotalEur)}`, 'success');
       loadOrders(); loadStats();
     } else if (data.error === 'paid_order') {
-      showAlert('ordersAlert',
-        '⚠️ Diese Bestellung wurde bereits bezahlt. Ticket kann nicht einfach gelöscht werden. ' +
-        'Bitte die <strong>Danger Zone</strong> verwenden oder manuell korrigieren.',
-        'warning'
-      );
+      showAlert('ordersAlert', '⚠️ Diese Bestellung wurde bereits bezahlt. Bitte die <strong>Danger Zone</strong> verwenden.', 'warning');
       btn.disabled = false; btn.innerHTML = '🗑';
     } else if (data.error === 'last_ticket') {
-      showAlert('ordersAlert',
-        '⚠️ Mindestens ein Ticket muss verbleiben. Um die gesamte Bestellung zu löschen, ' +
-        'bitte die <strong>Danger Zone</strong> verwenden.',
-        'warning'
-      );
+      showAlert('ordersAlert', '⚠️ Mindestens ein Ticket muss verbleiben.', 'warning');
       btn.disabled = false; btn.innerHTML = '🗑';
     } else {
       showAlert('ordersAlert', data.message || data.error || 'Fehler beim Löschen.');
