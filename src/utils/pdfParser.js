@@ -26,7 +26,7 @@ async function parseBankPdf(buffer) {
  */
 function extractTransactions(text) {
   // Referenz-Muster: ABIBALL- gefolgt von 4–12 alphanumerischen Zeichen
-  const refPattern = /ABIBALL-[A-Z0-9]{4,12}/gi;
+const refPattern = /ABIBALL-[A-Z0-9]{4}-[A-Z0-9]{4}(?:-\d+)?/gi;
 
   // Betrag-Muster: z.B. "90,00 EUR", "90.00 EUR", "EUR 90,00", "45,00"
   const amountPattern = /(?:EUR\s*)?(\d{1,6}[.,]\d{2})(?:\s*EUR)?/g;
