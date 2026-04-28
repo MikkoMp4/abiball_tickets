@@ -5,13 +5,97 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Abiball 2026 – Admin</title>
   <link rel="stylesheet" href="/css/style.css">
+  <style>
+    /* ── Login Overlay ───────────────────────────────────────────── */
+    #loginOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 20, 0.85);
+      backdrop-filter: blur(6px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    #loginOverlay .login-box {
+      background: #fff;
+      border-radius: 12px;
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+      text-align: center;
+    }
+    #loginOverlay h2 {
+      margin-bottom: 0.25rem;
+      font-size: 1.3rem;
+    }
+    #loginOverlay p {
+      color: #666;
+      font-size: 0.9rem;
+      margin-bottom: 1.5rem;
+    }
+    #loginOverlay input[type=password] {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      font-size: 1.1rem;
+      letter-spacing: 0.2em;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      text-align: center;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    #loginOverlay input[type=password]:focus {
+      border-color: var(--primary, #2563eb);
+    }
+    #loginOverlay .btn-login {
+      width: 100%;
+      padding: 0.75rem;
+      background: var(--primary, #2563eb);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    #loginOverlay .btn-login:hover { background: var(--primary-dark, #1d4ed8); }
+    #loginOverlay .btn-login:disabled { opacity: 0.6; cursor: not-allowed; }
+    #loginError {
+      color: #dc2626;
+      font-size: 0.875rem;
+      min-height: 1.25rem;
+      margin-bottom: 0.5rem;
+    }
+    #adminContent { display: none; }
+  </style>
 </head>
 <body>
+
+<!-- ── Login Overlay ───────────────────────────────────────────────────── -->
+<div id="loginOverlay">
+  <div class="login-box">
+    <div style="font-size:2.5rem;margin-bottom:.5rem">🎓</div>
+    <h2>Admin-Bereich</h2>
+    <p>Bitte Passwort eingeben</p>
+    <div id="loginError"></div>
+    <input type="password" id="loginInput" placeholder="••••••••••"
+      maxlength="64" autocomplete="current-password" autofocus>
+    <button class="btn-login" id="loginBtn">Einloggen</button>
+  </div>
+</div>
+
+<!-- ── Admin Content (hidden until auth) ───────────────────────────── -->
+<div id="adminContent">
 
 <nav class="topbar">
   <h1>🎓 Abiball 2026 – Admin</h1>
   <div class="nav-links">
     <a href="/">Ticketkauf</a>
+    <button id="logoutBtn" style="background:none;border:none;color:inherit;cursor:pointer;font-size:.9rem;padding:.25rem .5rem;opacity:.75">Abmelden</button>
   </div>
 </nav>
 
@@ -26,7 +110,7 @@
     <button class="tab-btn" data-tab="settings">⚙️ Einstellungen</button>
   </div>
 
-  <!-- ── TAB: Dashboard ────────────────────────────────────────── -->
+  <!-- ── TAB: Dashboard ──────────────────────────────────────────────── -->
   <div class="tab-pane active" id="tab-dashboard">
 
     <div class="stats-grid" id="statsGrid">
@@ -40,7 +124,6 @@
       <div class="stat-card"><div class="stat-value" id="st-payments">–</div><div class="stat-label">Zahlungseingänge</div></div>
     </div>
 
-    <!-- Schnelle Aktionsliste: offene Bestellungen -->
     <div class="card">
       <h2>⏳ Offene Zahlungen (noch nicht bezahlt)</h2>
       <div id="dashUnpaidAlert"></div>
@@ -58,67 +141,45 @@
 
   </div><!-- /tab-dashboard -->
 
-  <!-- ── TAB: Zahlungen ─────────────────────────────────────────── -->
+  <!-- ── TAB: Zahlungen ────────────────────────────────────────────────── -->
   <div class="tab-pane" id="tab-payments">
 
-    <!-- PRIMARY: PDF-Upload -->
     <div class="card" style="border:2px solid var(--primary)">
       <h2>📄 Kontoauszug als PDF hochladen <span class="badge badge-primary" style="font-size:.75rem;vertical-align:middle">Empfohlen</span></h2>
       <div id="pdfUploadAlert"></div>
-
       <p style="font-size:.9rem;color:var(--muted);margin-bottom:1rem">
         Lade eine oder mehrere Bank-PDF-Dateien hoch. Das System sucht automatisch nach
-        Abiball-Referenznummern und gleicht die Beträge ab. Passende Bestellungen werden
-        sofort als <strong>bezahlt</strong> markiert.
+        Abiball-Referenznummern und gleicht die Beträge ab.
       </p>
-
       <div class="form-group">
         <label for="pdfFiles">PDF-Dateien (max. 20 Dateien, je max. 20 MB)</label>
         <input type="file" id="pdfFiles" accept=".pdf" multiple>
       </div>
-
       <button class="btn btn-primary" id="pdfUploadBtn">📤 PDFs hochladen &amp; abgleichen</button>
     </div>
 
-    <!-- SECONDARY: CSV-Upload -->
     <div class="card">
       <h2>📊 Kontoauszug als CSV hochladen</h2>
       <div id="csvUploadAlert"></div>
-
-      <p style="font-size:.9rem;color:var(--muted);margin-bottom:1rem">
-        Alternativ kannst du den Kontoauszug als CSV-Datei hochladen.
-      </p>
-
       <div class="form-group">
         <label for="statementFile">CSV-Datei (max. 5 MB)</label>
         <input type="file" id="statementFile" accept=".csv,.txt">
       </div>
-
       <button class="btn btn-outline" id="csvUploadBtn">Hochladen &amp; prüfen</button>
     </div>
 
-    <!-- PDF-Ergebnis -->
     <div class="card" id="pdfResultCard" style="display:none">
       <h2>📋 Ergebnis der PDF-Verarbeitung</h2>
       <div id="pdfResultContent"></div>
     </div>
 
-    <!-- Zahlungsliste -->
     <div class="card">
       <h2>💳 Zahlungsübersicht</h2>
       <div id="paymentsAlert"></div>
       <div style="overflow-x:auto">
         <table id="paymentsTable">
           <thead>
-            <tr>
-              <th>Datum</th>
-              <th>Absender</th>
-              <th>Verwendungszweck</th>
-              <th>Betrag</th>
-              <th>Zuordnung</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
+            <tr><th>Datum</th><th>Absender</th><th>Verwendungszweck</th><th>Betrag</th><th>Zuordnung</th><th>Status</th><th></th></tr>
           </thead>
           <tbody id="paymentsTbody">
             <tr><td colspan="7" style="text-align:center;color:var(--muted)">Lade…</td></tr>
@@ -129,14 +190,11 @@
 
   </div><!-- /tab-payments -->
 
-  <!-- ── TAB: Bestellungen ──────────────────────────────────────── -->
+  <!-- ── TAB: Bestellungen ──────────────────────────────────────────────── -->
   <div class="tab-pane" id="tab-orders">
-
     <div class="card">
       <h2>🎟 Alle Bestellungen</h2>
       <div id="ordersAlert"></div>
-
-      <!-- Filter -->
       <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1rem;align-items:center">
         <label style="font-weight:600;font-size:.9rem">Filter:</label>
         <select id="ordersFilter" style="padding:.4rem .7rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.9rem">
@@ -145,22 +203,12 @@
           <option value="unpaid">Offen</option>
           <option value="sent">QR gesendet</option>
         </select>
-        <button class="btn btn-outline" style="padding:.35rem .85rem;font-size:.85rem" onclick="loadOrders()">🔄 Aktualisieren</button>
+        <button class="btn btn-outline" style="padding:.35rem .85rem;font-size:.85rem" onclick="loadOrders()">&#x1F504; Aktualisieren</button>
       </div>
-
       <div style="overflow-x:auto">
         <table id="ordersTable">
           <thead>
-            <tr>
-              <th>Person</th>
-              <th>E-Mail</th>
-              <th>Code</th>
-              <th>Tickets</th>
-              <th>Betrag</th>
-              <th>Status</th>
-              <th>Bestellt</th>
-              <th></th>
-            </tr>
+            <tr><th>Person</th><th>E-Mail</th><th>Code</th><th>Tickets</th><th>Betrag</th><th>Status</th><th>Bestellt</th><th></th></tr>
           </thead>
           <tbody id="ordersTbody">
             <tr><td colspan="8" style="text-align:center;color:var(--muted)">Lade…</td></tr>
@@ -168,33 +216,27 @@
         </table>
       </div>
     </div>
-
   </div><!-- /tab-orders -->
 
-  <!-- ── TAB: Personen ──────────────────────────────────────────── -->
+  <!-- ── TAB: Personen ────────────────────────────────────────────────── -->
   <div class="tab-pane" id="tab-persons">
 
-    <!-- Codes generieren -->
     <div class="card">
-      <h2>➕ Schüler &amp; Tickets erfassen</h2>
+      <h2>&#x2795; Schüler &amp; Tickets erfassen</h2>
       <div id="genAlert"></div>
-
       <p style="font-size:.9rem;color:var(--muted);margin-bottom:1rem">
         Füge pro Zeile eine Person ein: <code>Name; E-Mail (optional); Anzahl Tickets</code><br>
         Beispiel: <code>Max Mustermann; max@schule.de; 2</code>
       </p>
-
       <div class="form-group">
         <label for="personsBulk">Personen (eine pro Zeile)</label>
         <textarea id="personsBulk" rows="8" placeholder="Max Mustermann; max@schule.de; 2
 Erika Muster; ; 1
 Anna Schmidt; anna@example.com; 3"></textarea>
       </div>
-
       <button class="btn btn-primary" id="generateBtn">Codes generieren</button>
     </div>
 
-    <!-- Export -->
     <div class="card">
       <h2>📥 Codes exportieren</h2>
       <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
@@ -203,23 +245,13 @@ Anna Schmidt; anna@example.com; 3"></textarea>
       </div>
     </div>
 
-    <!-- Personenliste -->
     <div class="card">
       <h2>📋 Alle Personen</h2>
       <div id="personsAlert"></div>
       <div style="overflow-x:auto">
         <table id="personsTable">
           <thead>
-            <tr>
-              <th>Name</th>
-              <th>E-Mail</th>
-              <th>Code</th>
-              <th># Tickets</th>
-              <th>Bestellt</th>
-              <th>Bezahlt</th>
-              <th>Erstellt</th>
-              <th></th>
-            </tr>
+            <tr><th>Name</th><th>E-Mail</th><th>Code</th><th># Tickets</th><th>Bestellt</th><th>Bezahlt</th><th>Erstellt</th><th></th></tr>
           </thead>
           <tbody id="personsTbody">
             <tr><td colspan="8" style="text-align:center;color:var(--muted)">Lade…</td></tr>
@@ -230,10 +262,9 @@ Anna Schmidt; anna@example.com; 3"></textarea>
 
   </div><!-- /tab-persons -->
 
-  <!-- ── TAB: Einstellungen ─────────────────────────────────────── -->
+  <!-- ── TAB: Einstellungen ───────────────────────────────────────────── -->
   <div class="tab-pane" id="tab-settings">
 
-    <!-- Event-Daten -->
     <div class="card">
       <h2>🎉 Veranstaltungsinfos</h2>
       <div id="settingsEventAlert"></div>
@@ -258,13 +289,9 @@ Anna Schmidt; anna@example.com; 3"></textarea>
       <button class="btn btn-primary" id="saveEventBtn">💾 Veranstaltungsdaten speichern</button>
     </div>
 
-    <!-- Bank-/Zahlungsdaten -->
     <div class="card">
       <h2>🏦 Bankverbindung &amp; QR-Code-Einstellungen</h2>
       <div id="settingsBankAlert"></div>
-      <p style="font-size:.9rem;color:var(--muted);margin-bottom:1rem">
-        Diese Daten werden für den SEPA-Girocode (EPC-QR-Code) auf der Zahlungsseite verwendet.
-      </p>
       <div class="settings-grid">
         <div class="form-group" style="grid-column:1/-1">
           <label for="s-bank-name">Kontoinhaber / Empfängername</label>
@@ -282,25 +309,20 @@ Anna Schmidt; anna@example.com; 3"></textarea>
       <button class="btn btn-primary" id="saveBankBtn">💾 Bankdaten speichern</button>
     </div>
 
-    <!-- Vorschau -->
     <div class="card">
       <h2>👁 Aktuelle Konfiguration (Datenbank)</h2>
       <pre id="settingsPreview" style="background:#f5f5f5;padding:1rem;border-radius:var(--radius);font-size:.85rem;overflow-x:auto">Lade…</pre>
     </div>
 
-    <!-- Umgebungsvariablen-Status -->
     <div class="card">
       <h2>🐳 Docker-Umgebungsvariablen</h2>
-      <p style="font-size:.9rem;color:var(--muted);margin-bottom:1rem">
-        Zeigt welche Umgebungsvariablen im Container gesetzt sind. SMTP_PASS wird maskiert angezeigt.
-        Gesetzte Bank-Werte werden beim Start automatisch in die Datenbank übernommen.
-      </p>
       <div id="envStatusContent">Lade…</div>
     </div>
 
   </div><!-- /tab-settings -->
 
 </div><!-- /container -->
+</div><!-- /adminContent -->
 
 <script src="/js/admin.js"></script>
 </body>
