@@ -5,7 +5,7 @@ const Database = require('better-sqlite3');
 const path     = require('path');
 const fs       = require('fs');
 
-const DB_PATH  = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'tickets.db');
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'tickets.db');
 let   db;
 
 function getDb() {
@@ -21,7 +21,7 @@ function getDb() {
 }
 
 function initSchema(db) {
-  // ── persons ────────────────────────────────────────────────────────────────
+  // ── persons
   db.exec(`
     CREATE TABLE IF NOT EXISTS persons (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,21 +33,21 @@ function initSchema(db) {
     );
   `);
 
-  // ── orders ─────────────────────────────────────────────────────────────────
+  // ── orders
   db.exec(`
     CREATE TABLE IF NOT EXISTS orders (
-      id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      person_id     INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
-      total_eur     REAL    NOT NULL DEFAULT 0,
-      paid          INTEGER NOT NULL DEFAULT 0,
-      paid_amount   REAL    NOT NULL DEFAULT 0,
-      paid_at       TEXT,
-      submitted     INTEGER NOT NULL DEFAULT 0,
-      created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      person_id   INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
+      total_eur   REAL    NOT NULL DEFAULT 0,
+      paid        INTEGER NOT NULL DEFAULT 0,
+      paid_amount REAL    NOT NULL DEFAULT 0,
+      paid_at     TEXT,
+      submitted   INTEGER NOT NULL DEFAULT 0,
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     );
   `);
 
-  // ── order_tickets ──────────────────────────────────────────────────────────
+  // ── order_tickets
   db.exec(`
     CREATE TABLE IF NOT EXISTS order_tickets (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,7 +59,7 @@ function initSchema(db) {
     );
   `);
 
-  // ── payments ───────────────────────────────────────────────────────────────
+  // ── payments
   db.exec(`
     CREATE TABLE IF NOT EXISTS payments (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,7 +75,7 @@ function initSchema(db) {
     );
   `);
 
-  // ── settings ───────────────────────────────────────────────────────────────
+  // ── settings
   db.exec(`
     CREATE TABLE IF NOT EXISTS settings (
       key   TEXT PRIMARY KEY,
@@ -83,34 +83,36 @@ function initSchema(db) {
     );
   `);
 
-  // ── Migrationen: neue Spalten nachrüsten ──────────────────────────────────
-  const migrations = [
-    // Split-Payment auf Order-Ebene
-    { table: 'orders', col: 'split_payment', sql: 'ALTER TABLE orders ADD COLUMN split_payment INTEGER NOT NULL DEFAULT 0' },
-
-    // Split-Infos auf Ticket-Ebene
+  // ── Migrationen: neue Spalten nachrüsten
+  // SQLite erlaubt kein ALTER TABLE ADD COLUMN mit UNIQUE-Constraint.
+  // UNIQUE wird stattdessen als separater Index angelegt.
+  const columnMigrations = [
+    { table: 'orders',        col: 'split_payment',    sql: 'ALTER TABLE orders ADD COLUMN split_payment INTEGER NOT NULL DEFAULT 0' },
     { table: 'order_tickets', col: 'split_ref',        sql: 'ALTER TABLE order_tickets ADD COLUMN split_ref TEXT' },
     { table: 'order_tickets', col: 'split_ticket_num', sql: 'ALTER TABLE order_tickets ADD COLUMN split_ticket_num INTEGER' },
     { table: 'order_tickets', col: 'split_epc_blob',   sql: 'ALTER TABLE order_tickets ADD COLUMN split_epc_blob TEXT' },
     { table: 'order_tickets', col: 'split_paid_at',    sql: 'ALTER TABLE order_tickets ADD COLUMN split_paid_at TEXT' },
     { table: 'order_tickets', col: 'split_amount',     sql: 'ALTER TABLE order_tickets ADD COLUMN split_amount REAL' },
-
-    // QR-Token für Gültigkeitsverfolgung
-    { table: 'order_tickets', col: 'qr_token',    sql: 'ALTER TABLE order_tickets ADD COLUMN qr_token TEXT UNIQUE' },
+    // qr_token: kein UNIQUE hier, Index separat unten
+    { table: 'order_tickets', col: 'qr_token',     sql: 'ALTER TABLE order_tickets ADD COLUMN qr_token TEXT' },
     { table: 'order_tickets', col: 'qr_issued_at', sql: 'ALTER TABLE order_tickets ADD COLUMN qr_issued_at TEXT' },
   ];
 
-  for (const m of migrations) {
+  for (const m of columnMigrations) {
     try {
       const exists = db.prepare(
-        `SELECT COUNT(*) AS c FROM pragma_table_info(?) WHERE name = ?`
+        'SELECT COUNT(*) AS c FROM pragma_table_info(?) WHERE name = ?'
       ).get(m.table, m.col);
       if (exists.c === 0) db.exec(m.sql);
     } catch { /* Spalte existiert bereits */ }
   }
+
+  // UNIQUE-Index für qr_token (separater Schritt, kompatibel mit SQLite)
+  try {
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_order_tickets_qr_token ON order_tickets (qr_token) WHERE qr_token IS NOT NULL');
+  } catch { /* Index existiert bereits */ }
 }
 
-// ── Settings-Hilfsfunktionen ─────────────────────────────────────────────────
 function getSettings() {
   const db   = getDb();
   const rows = db.prepare('SELECT key, value FROM settings').all();
