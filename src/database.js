@@ -1,14 +1,12 @@
 /**
  * database.js – SQLite-Datenbankinitialisierung
- *
- * Idempotente Migrationen: jede ALTER TABLE wird nur ausgeführt wenn die
- * Spalte noch nicht existiert (PRAGMA table_info).
  */
 const Database = require('better-sqlite3');
 const path     = require('path');
 const fs       = require('fs');
 
-const DB_PATH  = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'abiball.db');
+// Always store DB in /app/data/abiball.db — mounted via ./data:/app/data in compose
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'abiball.db');
 
 let db;
 let settingsCache = null;
@@ -75,13 +73,14 @@ function getDb() {
     return db.prepare(`PRAGMA table_info(${table})`).all().some(r => r.name === column);
   }
 
-  // qr_token + qr_issued_at für zukünftige QR-Validierung
   if (!hasColumn('order_tickets', 'qr_token')) {
     db.exec('ALTER TABLE order_tickets ADD COLUMN qr_token TEXT UNIQUE');
   }
   if (!hasColumn('order_tickets', 'qr_issued_at')) {
     db.exec('ALTER TABLE order_tickets ADD COLUMN qr_issued_at TEXT');
   }
+
+  console.log(`[DB] Using database at: ${DB_PATH}`);
 
   return db;
 }

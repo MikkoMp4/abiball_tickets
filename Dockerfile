@@ -19,11 +19,9 @@ COPY --from=deps /app/node_modules ./node_modules
 # Copy application source
 COPY . .
 
-# Create persistent data directory and hand ownership to the node user
-RUN mkdir -p /data && chown node:node /data
+# Create data directory
+RUN mkdir -p /app/data && chown node:node /app/data
 
-# Directory where the SQLite database is stored (mount a volume here)
-ENV DATA_DIR=/data
 ENV NODE_ENV=production
 ENV PORT=3000
 
