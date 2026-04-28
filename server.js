@@ -68,6 +68,24 @@ app.use('/api/codes',          verifyLimiter, require('./src/routes/codes'));
 app.use('/api/tickets',        apiLimiter, require('./src/routes/tickets'));
 // payments.js exportiert { router, recalcPaymentStatus } → .router verwenden
 app.use('/api/payments',       apiLimiter, require('./src/routes/payments').router);
+// Startup: Zahlungsstatus für alle Personen mit Payments neu berechnen
+// (repariert Altdaten die vor dem Fix erstellt wurden)
+setTimeout(() => {
+  try {
+    const { recalcPaymentStatus } = require('./src/routes/payments');
+    const { getDb } = require('./src/database');
+    const db = getDb();
+    const persons = db.prepare(
+      'SELECT DISTINCT person_id FROM payments WHERE person_id IS NOT NULL'
+    ).all();
+    for (const { person_id } of persons) {
+      recalcPaymentStatus(db, person_id);
+    }
+    console.log(`[startup] Zahlungsstatus für ${persons.length} Person(en) neu berechnet`);
+  } catch (e) {
+    console.error('[startup] recalc fehlgeschlagen:', e.message);
+  }
+}, 0);
 
 // SPA-Fallback
 app.get('*', staticLimiter, (req, res) => {
