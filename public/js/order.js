@@ -92,6 +92,26 @@ function injectManageStyles() {
       margin-bottom: 1.25rem;
     }
 
+    /* ── Add-ticket CTA (payment tab) ── */
+    .add-ticket-cta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: .6rem;
+      background: var(--primary-light);
+      border: 1.5px solid rgba(232,80,10,.18);
+      border-radius: var(--radius);
+      padding: .85rem 1rem;
+      margin-bottom: 1.25rem;
+    }
+    .add-ticket-cta-text {
+      font-size: .88rem;
+      font-weight: 500;
+      color: var(--primary-dark);
+    }
+    .add-ticket-cta-text strong { display: block; font-size: .95rem; margin-bottom: .1rem; }
+
     /* ── Payment box ── */
     .pay-box {
       border: 1.5px solid var(--border);
@@ -461,12 +481,29 @@ function renderPaymentPane(data) {
   const totalEur   = parseFloat(order.total_eur);
   const fullyPaid  = order.paid === 1;
   const partial    = order.paid === 2;
+  const canAdd     = (data.remainingSlots || 0) > 0;
 
   let statusHtml = '';
   if (fullyPaid) {
     statusHtml = `<div class="status-paid"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Vollständig bezahlt – Tickets wurden per E-Mail verschickt.</div>`;
   } else if (partial) {
     statusHtml = `<div class="status-partial">Teilzahlung erhalten: <strong>${fmt(paidAmount)}</strong> von <strong>${fmt(totalEur)}</strong> – noch ausstehend: <strong>${fmt(remEur)}</strong></div>`;
+  }
+
+  // ── Prominent "Ticket hinzufügen" CTA whenever slots are free ──
+  let addCtaHtml = '';
+  if (canAdd) {
+    const priceHint = data.config ? fmt(data.config.price) : '';
+    addCtaHtml = `
+      <div class="add-ticket-cta">
+        <div class="add-ticket-cta-text">
+          <strong>Noch ${data.remainingSlots} Ticket-Slot${data.remainingSlots > 1 ? 's' : ''} frei</strong>
+          Du kannst weitere Tickets hinzufügen${priceHint ? ` (je ${priceHint})` : ''}.
+          ${fullyPaid ? 'Der Betrag wird separat überwiesen.' : ''}
+        </div>
+        <button id="ctaAddTicketBtn" class="btn btn-primary btn-sm">+ Ticket hinzufügen</button>
+      </div>
+    `;
   }
 
   let splitToggle = '';
@@ -487,6 +524,7 @@ function renderPaymentPane(data) {
 
   pane.innerHTML = `
     ${statusHtml}
+    ${addCtaHtml}
     ${splitToggle}
     <div id="paymentDetails"></div>
   `;
@@ -496,6 +534,27 @@ function renderPaymentPane(data) {
   if (!fullyPaid) {
     document.getElementById('splitToggle')
       .addEventListener('change', e => toggleSplit(e.target.checked, data));
+  }
+
+  // CTA button → switch to edit tab and open add form
+  if (canAdd) {
+    document.getElementById('ctaAddTicketBtn').addEventListener('click', () => {
+      // Activate "Angaben ändern" tab
+      paymentCard.querySelectorAll('.m-tab').forEach(b => b.classList.remove('active'));
+      paymentCard.querySelectorAll('.m-pane').forEach(p => p.classList.remove('active'));
+      const editTab = paymentCard.querySelector('[data-pane="edit"]');
+      if (editTab) editTab.classList.add('active');
+      const editPane = document.getElementById('m-edit');
+      if (editPane) editPane.classList.add('active');
+
+      // Open the add form and focus the name field
+      const addForm = document.getElementById('addTicketForm');
+      const addBtn  = document.getElementById('addTicketBtn');
+      if (addForm) { addForm.style.display = 'block'; }
+      if (addBtn)  { addBtn.style.display  = 'none'; }
+      const nameInput = document.getElementById('addTicketName');
+      if (nameInput) { nameInput.focus(); nameInput.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    });
   }
 }
 
@@ -678,7 +737,7 @@ function renderEditPane(data) {
     <div class="section-header">
       <h3>Ticket-Angaben</h3>
       <div style="display:flex;gap:.5rem;flex-wrap:wrap">
-        ${canAdd ? `<button id="addTicketBtn" class="btn btn-outline-dark btn-sm">Ticket hinzufügen</button>` : ''}
+        ${canAdd ? `<button id="addTicketBtn" class="btn btn-outline-dark btn-sm">+ Ticket hinzufügen</button>` : ''}
         <button id="toggleEditBtn" class="btn btn-primary btn-sm">Angaben bearbeiten</button>
       </div>
     </div>
