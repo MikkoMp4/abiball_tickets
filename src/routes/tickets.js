@@ -5,7 +5,7 @@
  * POST /api/tickets/order            – Bestellung speichern + EPC-QR erzeugen
  * GET  /api/tickets/order/:personId  – Bestellung laden
  *
- * Each ticket now only requires: ticketName + ticketEmail (no class field).
+ * Each ticket only requires: ticketName + ticketEmail (no class field).
  */
 const express = require('express');
 const router  = express.Router();
@@ -13,7 +13,7 @@ const { getDb, getSettings } = require('../database');
 const { buildEpcPayload }   = require('../utils/epcGenerator');
 const { generateQrDataUrl } = require('../utils/qrGenerator');
 
-// ── GET /api/tickets/config ──────────────────────────────────────────────────
+// ── GET /api/tickets/config ────────────────────────────────────────────────
 router.get('/config', (req, res) => {
   const s = getSettings();
   res.json({
@@ -27,7 +27,7 @@ router.get('/config', (req, res) => {
   });
 });
 
-// ── POST /api/tickets/order ──────────────────────────────────────────────────
+// ── POST /api/tickets/order ───────────────────────────────────────────────
 router.post('/order', async (req, res) => {
   const { personId, tickets } = req.body;
   // tickets: [{ ticketName, ticketEmail }]
@@ -39,10 +39,10 @@ router.post('/order', async (req, res) => {
   const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   for (const t of tickets) {
     if (!t.ticketName || !t.ticketName.trim()) {
-      return res.status(400).json({ error: 'Jedes Ticket benötigt einen Namen.' });
+      return res.status(400).json({ error: 'Jedes Ticket ben\u00f6tigt einen Namen.' });
     }
     if (!t.ticketEmail || !emailRe.test(t.ticketEmail.trim())) {
-      return res.status(400).json({ error: 'Jedes Ticket benötigt eine gültige E-Mail-Adresse.' });
+      return res.status(400).json({ error: 'Jedes Ticket ben\u00f6tigt eine g\u00fcltige E-Mail-Adresse.' });
     }
   }
 
@@ -77,21 +77,19 @@ router.post('/order', async (req, res) => {
   });
   const epcQr = await generateQrDataUrl(epcPayload);
 
-  // Bestellung speichern
-  // ticket_class is kept in schema for backwards compat but always empty now
+  // Bestellung speichern – email stored in ticket_email column
   const insertOrder = db.prepare(
     'INSERT INTO orders (person_id, submitted, total_eur, epc_blob) VALUES (?, 1, ?, ?)'
   );
   const insertTicket = db.prepare(
-    'INSERT INTO order_tickets (order_id, ticket_name, ticket_class, extra_info) VALUES (?, ?, ?, ?)'
+    'INSERT INTO order_tickets (order_id, ticket_name, ticket_email) VALUES (?, ?, ?)'
   );
 
   const saveOrder = db.transaction(() => {
     const result  = insertOrder.run(personId, totalEur, epcPayload);
     const orderId = result.lastInsertRowid;
     tickets.forEach(t =>
-      insertTicket.run(orderId, t.ticketName.trim(), '', t.ticketEmail.trim())
-      // extra_info column reused for e-mail; ticket_class intentionally left empty
+      insertTicket.run(orderId, t.ticketName.trim(), t.ticketEmail.trim())
     );
     return orderId;
   });
@@ -104,7 +102,7 @@ router.post('/order', async (req, res) => {
   }
 });
 
-// ── GET /api/tickets/order/:personId ────────────────────────────────────────
+// ── GET /api/tickets/order/:personId ────────────────────────────────────────────
 router.get('/order/:personId', async (req, res) => {
   const db = getDb();
   const order = db.prepare(
