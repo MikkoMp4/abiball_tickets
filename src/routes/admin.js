@@ -56,6 +56,41 @@ async function sendTicketsForOrder(db, person, order) {
   return sentTo;
 }
 
+// ── CSV header detection ────────────────────────────────────────────────────────────────────────────
+// Banks like DKB prepend several metadata lines before the actual header row.
+// We scan all lines and pick the first one that contains a known header keyword.
+function findCsvHeaderLine(lines, sep) {
+  const HEADER_KEYWORDS = ['buchungsdatum', 'buchungstag', 'verwendungszweck', 'betrag', 'date', 'amount'];
+  for (let i = 0; i < lines.length; i++) {
+    const lower = lines[i].toLowerCase();
+    if (HEADER_KEYWORDS.some(k => lower.includes(k))) return i;
+  }
+  return 0; // fallback: assume first line is header
+}
+
+// Normalize a column header string for fuzzy matching:
+// lower-case, strip quotes, remove special chars like (*r) from DKB gender suffixes
+function normHeader(h) {
+  return h
+    .replace(/^"|"$/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\(.*?\)/g, '')   // remove anything in parentheses: "Betrag (€)" -> "betrag "
+    .replace(/\*/g, '')        // remove asterisks: "Zahlungspflichtige*r" -> "zahlungspflichtige r"
+    .replace(/\s+/g, ' ')      // collapse whitespace
+    .trim();
+}
+
+function makeColIdx(header) {
+  return (candidates) => {
+    for (const c of candidates) {
+      const i = header.findIndex(h => h.includes(c));
+      if (i !== -1) return i;
+    }
+    return -1;
+  };
+}
+
 router.post('/generate-codes', (req, res) => {
   const { persons } = req.body;
   if (!Array.isArray(persons) || !persons.length) return res.status(400).json({ error: 'persons-Array erforderlich' });
@@ -179,40 +214,38 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
 
   try {
     if (ext === '.csv') {
-      // Parse CSV: split lines, detect separator, map columns
       const text  = req.file.buffer.toString('utf-8').replace(/^\uFEFF/, ''); // strip BOM
       const lines = text.split(/\r?\n/).filter(l => l.trim());
       if (lines.length < 2) return res.status(400).json({ error: 'CSV ist leer oder hat keine Datenzeilen' });
 
-      const sep    = lines[0].includes(';') ? ';' : ',';
-      const header = lines[0].split(sep).map(h => h.replace(/^"|"$/g, '').trim().toLowerCase());
+      const sep        = lines[0].includes(';') ? ';' : ',';
+      const headerLine = findCsvHeaderLine(lines, sep);
+      const header     = lines[headerLine].split(sep).map(normHeader);
+      const colIdx     = makeColIdx(header);
 
-      // Flexible column detection – support common German/English bank CSV headers
-      const colIdx = (candidates) => {
-        for (const c of candidates) {
-          const i = header.findIndex(h => h.includes(c));
-          if (i !== -1) return i;
-        }
-        return -1;
-      };
-
-      const dateCol   = colIdx(['buchungstag', 'buchungsdatum', 'valuta', 'date', 'datum']);
-      const nameCol   = colIdx(['auftraggeber', 'beguenstigter', 'name', 'sender', 'absender', 'empfaenger']);
-      const refCol    = colIdx(['verwendungszweck', 'reference', 'referenz', 'betreff', 'description', 'buchungstext']);
-      const amtCol    = colIdx(['betrag', 'amount', 'umsatz', 'wert']);
+      // Column candidates – normalized (no parens, no asterisks, lower-case)
+      // DKB:  "Buchungsdatum" | "Zahlungspflichtige r" (after norm) | "Verwendungszweck" | "betrag "
+      const dateCol = colIdx(['buchungsdatum', 'buchungstag', 'valuta', 'date', 'datum']);
+      const nameCol = colIdx(['zahlungspflichtige', 'auftraggeber', 'beguenstigter', 'absender', 'sender', 'name']);
+      const refCol  = colIdx(['verwendungszweck', 'reference', 'referenz', 'betreff', 'description', 'buchungstext']);
+      const amtCol  = colIdx(['betrag', 'amount', 'umsatz', 'wert']); // "betrag " (after stripping "(€)") matches 'betrag'
 
       if (refCol === -1 || amtCol === -1) {
-        return res.status(400).json({ error: 'CSV-Format nicht erkannt: Spalten "Verwendungszweck" und "Betrag" werden benötigt.' });
+        return res.status(400).json({
+          error: `CSV-Format nicht erkannt: Spalten "Verwendungszweck" und "Betrag" werden benötigt.` +
+                 ` Erkannte Spalten: ${header.join(', ')}`,
+        });
       }
 
-      for (let i = 1; i < lines.length; i++) {
-        // Respect quoted fields that may contain the separator
-        const cols = lines[i].match(/(".*?"|[^;,]+)(?=[;,]|$)/g) || lines[i].split(sep);
-        const clean = (idx) => idx !== -1 && cols[idx] ? cols[idx].replace(/^"|"$/g, '').trim() : '';
+      for (let i = headerLine + 1; i < lines.length; i++) {
+        // Split respecting quoted fields
+        const cols  = lines[i].match(/(?:"[^"]*"|[^;,]*)(?=[;,]|$)/g) || lines[i].split(sep);
+        const clean = (idx) => (idx !== -1 && cols[idx]) ? cols[idx].replace(/^"|"$/g, '').trim() : '';
 
+        // DKB amounts: "33" (plain integer) or "1.234,56" (German locale with thousands dot)
         const rawAmt = clean(amtCol).replace(/\./g, '').replace(',', '.');
         const amount = parseFloat(rawAmt);
-        if (isNaN(amount)) continue; // skip non-numeric rows (header duplicates, totals, etc.)
+        if (isNaN(amount)) continue; // skip metadata / empty / totals rows
 
         rows.push({
           booking_date: clean(dateCol) || new Date().toISOString().slice(0, 10),
@@ -228,20 +261,22 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
       const ws = workbook.worksheets[0];
       if (!ws) return res.status(400).json({ error: 'Excel-Datei enthält kein Worksheet' });
 
-      // Row 1 = header
-      const header = [];
-      ws.getRow(1).eachCell((cell, colNum) => { header[colNum] = String(cell.value || '').trim().toLowerCase(); });
-
-      const colIdx = (candidates) => {
-        for (const c of candidates) {
-          const i = header.findIndex(h => h && h.includes(c));
-          if (i !== -1) return i;
+      // Scan rows for the header (same strategy as CSV)
+      let headerRowNum = 1;
+      ws.eachRow((row, rowNum) => {
+        if (headerRowNum !== 1) return;
+        const lower = row.values.map(v => String(v || '').toLowerCase()).join(' ');
+        if (['buchungsdatum', 'buchungstag', 'verwendungszweck', 'betrag', 'date'].some(k => lower.includes(k))) {
+          headerRowNum = rowNum;
         }
-        return -1;
-      };
+      });
 
-      const dateCol = colIdx(['buchungstag', 'buchungsdatum', 'valuta', 'date', 'datum']);
-      const nameCol = colIdx(['auftraggeber', 'beguenstigter', 'name', 'sender', 'absender', 'empfaenger']);
+      const header = [];
+      ws.getRow(headerRowNum).eachCell((cell, colNum) => { header[colNum] = normHeader(String(cell.value || '')); });
+      const colIdx = makeColIdx(header);
+
+      const dateCol = colIdx(['buchungsdatum', 'buchungstag', 'valuta', 'date', 'datum']);
+      const nameCol = colIdx(['zahlungspflichtige', 'auftraggeber', 'beguenstigter', 'absender', 'sender', 'name']);
       const refCol  = colIdx(['verwendungszweck', 'reference', 'referenz', 'betreff', 'description', 'buchungstext']);
       const amtCol  = colIdx(['betrag', 'amount', 'umsatz', 'wert']);
 
@@ -250,7 +285,7 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
       }
 
       ws.eachRow((row, rowNum) => {
-        if (rowNum === 1) return; // skip header
+        if (rowNum <= headerRowNum) return;
         const get = (idx) => idx !== -1 ? String(row.getCell(idx).value || '').trim() : '';
         const rawAmt = get(amtCol).replace(/\./g, '').replace(',', '.');
         const amount = parseFloat(rawAmt);
