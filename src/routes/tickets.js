@@ -2,11 +2,12 @@
  * routes/tickets.js – Bestellprozess
  *
  * GET    /api/tickets/config
- * POST   /api/tickets/order                              (race-condition-safe)
- * GET    /api/tickets/my-order?code=CODE                (Manage-Mode)
- * PATCH  /api/tickets/order/:orderId/ticket/:ticketId   (Name/E-Mail ändern)
- * DELETE /api/tickets/order/:orderId/ticket/:ticketId   (Ticket löschen, user-seitig)
- * POST   /api/tickets/validate                          (QR-Token prüfen)
+ * POST   /api/tickets/order                              (race-condition-safe, partial orders)
+ * POST   /api/tickets/order/:orderId/add                 (Ticket nachträglich hinzufügen)
+ * GET    /api/tickets/my-order?code=CODE                 (Manage-Mode)
+ * PATCH  /api/tickets/order/:orderId/ticket/:ticketId    (Name/E-Mail ändern)
+ * DELETE /api/tickets/order/:orderId/ticket/:ticketId    (Ticket löschen, user-seitig)
+ * POST   /api/tickets/validate                           (QR-Token prüfen)
  */
 const express = require('express');
 const router  = express.Router();
@@ -30,8 +31,11 @@ router.get('/config', (req, res) => {
 });
 
 // ── POST /api/tickets/order ───────────────────────────────────────────────
+// Legt eine neue Bestellung an. Tickets-Array darf WENIGER als num_tickets
+// Einträge haben (Teilbestellung). Leere Slots werden einfach weggelassen.
+// splitPayment=true erzeugt pro Ticket eine eigene Referenz (CODE-1, CODE-2, …)
 router.post('/order', async (req, res) => {
-  const { personId, tickets } = req.body;
+  const { personId, tickets, splitPayment } = req.body;
   if (!personId || !Array.isArray(tickets) || tickets.length === 0)
     return res.status(400).json({ error: 'personId und tickets erforderlich' });
 
@@ -59,30 +63,62 @@ router.post('/order', async (req, res) => {
     return res.status(400).json({ error: `Zu viele Tickets. Maximal ${person.num_tickets} erlaubt.` });
 
   const totalEur   = tickets.length * TICKET_CONFIG.price;
-  const reference  = `ABIBALL-${person.code}`;
-  const epcPayload = buildEpcPayload({
-    name: TICKET_CONFIG.accountName, iban: TICKET_CONFIG.iban,
-    bic: TICKET_CONFIG.bic, amount: totalEur, reference,
-  });
-  const epcQr = await generateQrDataUrl(epcPayload);
+  // splitPayment: Referenz pro Ticket als ABIBALL-CODE-N, sonst ABIBALL-CODE
+  const baseRef    = `ABIBALL-${person.code}`;
+  const epcPayload = splitPayment
+    ? null   // Bei Split kein einzelner EPC-QR; jedes Ticket bekommt seinen eigenen
+    : buildEpcPayload({
+        name: TICKET_CONFIG.accountName, iban: TICKET_CONFIG.iban,
+        bic: TICKET_CONFIG.bic, amount: totalEur, reference: baseRef,
+      });
+  const epcQr = epcPayload ? await generateQrDataUrl(epcPayload) : null;
 
-  const insertOrder  = db.prepare('INSERT INTO orders (person_id, submitted, total_eur, epc_blob) VALUES (?, 1, ?, ?)');
-  const insertTicket = db.prepare('INSERT INTO order_tickets (order_id, ticket_name, ticket_email) VALUES (?, ?, ?)');
+  // Für Split: pro Ticket eigener EPC-QR
+  let splitEpcQrs = [];
+  if (splitPayment) {
+    for (let i = 0; i < tickets.length; i++) {
+      const ref  = `${baseRef}-${i + 1}`;
+      const blob = buildEpcPayload({
+        name: TICKET_CONFIG.accountName, iban: TICKET_CONFIG.iban,
+        bic: TICKET_CONFIG.bic, amount: TICKET_CONFIG.price, reference: ref,
+      });
+      splitEpcQrs.push({ ref, qr: await generateQrDataUrl(blob), blob });
+    }
+  }
+
+  const insertOrder  = db.prepare(
+    'INSERT INTO orders (person_id, submitted, total_eur, epc_blob, split_payment) VALUES (?, 1, ?, ?, ?)'
+  );
+  const insertTicket = db.prepare(
+    'INSERT INTO order_tickets (order_id, ticket_name, ticket_email, split_ref, split_epc_blob) VALUES (?, ?, ?, ?, ?)'
+  );
 
   let orderId;
   try {
     const saveOrder = db.transaction(() => {
-      const existing = db.prepare(
-        'SELECT id FROM orders WHERE person_id = ? AND submitted = 1'
-      ).get(personId);
+      // Race-condition guard: nur blocken wenn noch Tickets in der Order sind
+      const existing = db.prepare(`
+        SELECT o.id FROM orders o
+        WHERE o.person_id = ? AND o.submitted = 1
+        AND EXISTS (SELECT 1 FROM order_tickets ot WHERE ot.order_id = o.id)
+      `).get(personId);
       if (existing) {
         const err = new Error('already_ordered');
         err.statusCode = 409;
         throw err;
       }
-      const result = insertOrder.run(personId, totalEur, epcPayload);
+      // Alte leere Order aufräumen falls vorhanden
+      db.prepare(
+        'DELETE FROM orders WHERE person_id = ? AND submitted = 1 AND NOT EXISTS (SELECT 1 FROM order_tickets ot WHERE ot.order_id = orders.id)'
+      ).run(personId);
+
+      const result = insertOrder.run(personId, totalEur, epcPayload, splitPayment ? 1 : 0);
       const oid    = result.lastInsertRowid;
-      tickets.forEach(t => insertTicket.run(oid, t.ticketName.trim(), t.ticketEmail.trim()));
+      tickets.forEach((t, i) => {
+        const splitRef  = splitPayment ? `${baseRef}-${i + 1}` : null;
+        const splitBlob = splitPayment ? splitEpcQrs[i].blob : null;
+        insertTicket.run(oid, t.ticketName.trim(), t.ticketEmail.trim(), splitRef, splitBlob);
+      });
       return oid;
     });
     orderId = saveOrder();
@@ -95,7 +131,72 @@ router.post('/order', async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 
-  res.json({ orderId, totalEur, reference, epcQr });
+  res.json({
+    orderId, totalEur,
+    reference:    baseRef,
+    epcQr,
+    splitPayment: !!splitPayment,
+    splitEpcQrs:  splitPayment ? splitEpcQrs.map(s => ({ ref: s.ref, qr: s.qr })) : [],
+  });
+});
+
+// ── POST /api/tickets/order/:orderId/add ─────────────────────────────────────
+// Nachträgliches Hinzufügen eines Tickets zur bestehenden (nicht bezahlten) Order.
+// Auth per Code. Limit: bestehende Tickets + 1 <= person.num_tickets.
+router.post('/order/:orderId/add', async (req, res) => {
+  const { code, ticketName, ticketEmail } = req.body;
+  const { orderId } = req.params;
+
+  if (!code || !ticketName || !ticketEmail)
+    return res.status(400).json({ error: 'code, ticketName und ticketEmail erforderlich' });
+
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRe.test(ticketEmail.trim()))
+    return res.status(400).json({ error: 'Ungültige E-Mail-Adresse' });
+
+  const db     = getDb();
+  const s      = getSettings();
+  const person = db.prepare('SELECT * FROM persons WHERE code = ?').get(code.trim().toUpperCase());
+  if (!person) return res.status(403).json({ error: 'Ungültiger Code' });
+
+  const order = db.prepare('SELECT * FROM orders WHERE id = ? AND person_id = ?').get(orderId, person.id);
+  if (!order) return res.status(403).json({ error: 'Keine Berechtigung' });
+
+  if (order.paid === 1)
+    return res.status(409).json({ error: 'paid_order', message: 'Bezahlte Bestellungen können nicht erweitert werden.' });
+
+  const existing = db.prepare('SELECT COUNT(*) AS cnt FROM order_tickets WHERE order_id = ?').get(orderId);
+  if (existing.cnt >= person.num_tickets)
+    return res.status(409).json({ error: 'limit_reached', message: `Du hast bereits ${person.num_tickets} Ticket(s) bestellt – das ist dein Maximum.` });
+
+  const ticketPrice = parseFloat(s.ticket_price || '45');
+  const baseRef     = `ABIBALL-${person.code}`;
+  const newIndex    = existing.cnt + 1;
+
+  let splitRef     = null;
+  let splitEpcBlob = null;
+  if (order.split_payment) {
+    splitRef = `${baseRef}-${newIndex}`;
+    splitEpcBlob = buildEpcPayload({
+      name: s.bank_name || '', iban: s.bank_iban || '',
+      bic: s.bank_bic || '', amount: ticketPrice, reference: splitRef,
+    });
+  }
+
+  db.transaction(() => {
+    db.prepare(
+      'INSERT INTO order_tickets (order_id, ticket_name, ticket_email, split_ref, split_epc_blob) VALUES (?, ?, ?, ?, ?)'
+    ).run(orderId, ticketName.trim(), ticketEmail.trim(), splitRef, splitEpcBlob);
+    db.prepare('UPDATE orders SET total_eur = total_eur + ? WHERE id = ?').run(ticketPrice, orderId);
+  })();
+
+  const newTotal  = db.prepare('SELECT total_eur FROM orders WHERE id = ?').get(orderId).total_eur;
+  const newTicket = db.prepare('SELECT * FROM order_tickets WHERE order_id = ? ORDER BY id DESC LIMIT 1').get(orderId);
+
+  let splitEpcQr = null;
+  if (splitEpcBlob) splitEpcQr = await generateQrDataUrl(splitEpcBlob);
+
+  res.json({ ok: true, newTotalEur: newTotal, ticket: newTicket, splitRef, splitEpcQr });
 });
 
 // ── GET /api/tickets/my-order?code=CODE ──────────────────────────────────────
@@ -117,10 +218,18 @@ router.get('/my-order', async (req, res) => {
   let epcQr = null;
   if (order.epc_blob) epcQr = await generateQrDataUrl(order.epc_blob);
 
+  // Split-EPC-QRs pro Ticket generieren
+  const ticketsWithQr = await Promise.all(tickets.map(async t => {
+    let sqr = null;
+    if (t.split_epc_blob) sqr = await generateQrDataUrl(t.split_epc_blob);
+    return { ...t, splitEpcQr: sqr };
+  }));
+
   const s = getSettings();
   res.json({
-    order, tickets, epcQr,
-    reference: `ABIBALL-${person.code}`,
+    order, tickets: ticketsWithQr, epcQr,
+    reference:    `ABIBALL-${person.code}`,
+    remainingSlots: person.num_tickets - tickets.length,
     config: {
       price:       parseFloat(s.ticket_price || '45'),
       iban:        s.bank_iban  || '',
@@ -130,9 +239,6 @@ router.get('/my-order', async (req, res) => {
 });
 
 // ── PATCH /api/tickets/order/:orderId/ticket/:ticketId ───────────────────────
-// Ändert Name + E-Mail eines Tickets. Wenn die E-Mail sich geändert hat UND
-// die Bestellung bezahlt ist, wird automatisch eine neue Ticket-E-Mail gesendet
-// (mit rotiertem QR-Token, damit der alte QR-Code ungültig wird).
 router.patch('/order/:orderId/ticket/:ticketId', async (req, res) => {
   const { code, ticketName, ticketEmail } = req.body;
   const { orderId, ticketId } = req.params;
@@ -154,14 +260,13 @@ router.patch('/order/:orderId/ticket/:ticketId', async (req, res) => {
   const ticket = db.prepare('SELECT * FROM order_tickets WHERE id = ? AND order_id = ?').get(ticketId, orderId);
   if (!ticket) return res.status(404).json({ error: 'Ticket nicht gefunden' });
 
-  const oldEmail   = ticket.ticket_email;
-  const newEmail   = ticketEmail.trim();
+  const oldEmail    = ticket.ticket_email;
+  const newEmail    = ticketEmail.trim();
   const emailChanged = oldEmail !== newEmail;
 
   db.prepare('UPDATE order_tickets SET ticket_name = ?, ticket_email = ? WHERE id = ?')
     .run(ticketName.trim(), newEmail, ticketId);
 
-  // Auto-resend wenn Bestellung bezahlt und E-Mail geändert
   let emailResent = false;
   if (emailChanged && order.paid === 1) {
     try {
@@ -177,22 +282,14 @@ router.patch('/order/:orderId/ticket/:ticketId', async (req, res) => {
       });
       emailResent = true;
     } catch (e) {
-      // E-Mail-Fehler soll die Speicherung nicht rückgängig machen
       console.error('[tickets] resend email failed:', e.message);
     }
   }
 
-  res.json({
-    success: true,
-    emailChanged,
-    emailResent,
-    paid: order.paid === 1,
-  });
+  res.json({ success: true, emailChanged, emailResent, paid: order.paid === 1 });
 });
 
 // ── DELETE /api/tickets/order/:orderId/ticket/:ticketId ──────────────────────
-// User-seitiges Ticket-Löschen (Code als Auth).
-// Blockiert wenn: Bestellung bezahlt | letztes verbleibendes Ticket.
 router.delete('/order/:orderId/ticket/:ticketId', (req, res) => {
   const { code } = req.body;
   const { orderId, ticketId } = req.params;
@@ -234,8 +331,6 @@ router.delete('/order/:orderId/ticket/:ticketId', (req, res) => {
 });
 
 // ── POST /api/tickets/validate ───────────────────────────────────────────────
-// QR-Token validieren (für Einlass-Scanner).
-// Body: { token }
 router.post('/validate', (req, res) => {
   const { token } = req.body;
   if (!token) return res.status(400).json({ valid: false, error: 'Token fehlt' });
@@ -249,8 +344,8 @@ router.post('/validate', (req, res) => {
     'WHERE ot.qr_token = ?'
   ).get(token);
 
-  if (!ticket)        return res.json({ valid: false, reason: 'Unbekanntes Token' });
-  if (!ticket.paid)   return res.json({ valid: false, reason: 'Noch nicht bezahlt', name: ticket.ticket_name });
+  if (!ticket)      return res.json({ valid: false, reason: 'Unbekanntes Token' });
+  if (!ticket.paid) return res.json({ valid: false, reason: 'Noch nicht bezahlt', name: ticket.ticket_name });
 
   res.json({
     valid:      true,
