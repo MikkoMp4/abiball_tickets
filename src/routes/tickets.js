@@ -2,12 +2,12 @@
  * routes/tickets.js – Bestellprozess
  *
  * GET    /api/tickets/config
- * POST   /api/tickets/order                              (race-condition-safe, partial orders)
- * POST   /api/tickets/order/:orderId/add                 (Ticket nachträglich hinzufügen)
- * GET    /api/tickets/my-order?code=CODE                 (Manage-Mode, inkl. ticket-QR-DataURLs)
- * PATCH  /api/tickets/order/:orderId/ticket/:ticketId    (Name/E-Mail ändern)
- * DELETE /api/tickets/order/:orderId/ticket/:ticketId    (Ticket löschen, user-seitig)
- * POST   /api/tickets/validate                           (QR-Token prüfen)
+ * POST   /api/tickets/order
+ * POST   /api/tickets/order/:orderId/add
+ * GET    /api/tickets/my-order?code=CODE
+ * PATCH  /api/tickets/order/:orderId/ticket/:ticketId
+ * DELETE /api/tickets/order/:orderId/ticket/:ticketId
+ * POST   /api/tickets/validate
  */
 const express = require('express');
 const router  = express.Router();
@@ -270,6 +270,7 @@ router.get('/my-order', async (req, res) => {
     epcQr = await generateQrDataUrl(order.epc_blob);
   }
 
+  // Generate ticket QR codes WITHOUT rotating the token (forceRotate = false / default)
   const ticketsWithQr = await Promise.all(tickets.map(async t => {
     let splitEpcQr = null;
     if (t.split_epc_blob && !t.ticket_paid) {
@@ -337,16 +338,17 @@ router.patch('/order/:orderId/ticket/:ticketId', async (req, res) => {
   db.prepare('UPDATE order_tickets SET ticket_name = ?, ticket_email = ? WHERE id = ?')
     .run(newName, newEmail, ticketId);
 
-  // Resend ticket email whenever the order is paid AND name or email changed.
-  // The name is embedded in the QR token payload, so a name change invalidates
-  // the old QR code – the recipient needs the freshly generated one.
+  // Resend ticket email when paid AND name or email changed.
+  // forceRotate:true so a genuinely new QR is issued and the old one invalidated.
   let emailResent = false;
   if (anythingChanged && order.paid === 1) {
     try {
       const updatedTicket = db.prepare('SELECT * FROM order_tickets WHERE id = ?').get(ticketId);
-      const qrBuffer = await generateQrBufferForTicket(db, updatedTicket, {
-        orderId: order.id, personCode: person.code,
-      });
+      const qrBuffer = await generateQrBufferForTicket(
+        db, updatedTicket,
+        { orderId: order.id, personCode: person.code },
+        true  // forceRotate – name/email changed, old token must be invalidated
+      );
       await sendSingleTicketEmail({
         to:         newEmail,
         personName: newName,

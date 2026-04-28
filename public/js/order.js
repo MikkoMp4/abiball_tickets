@@ -3,7 +3,7 @@
 const params   = new URLSearchParams(window.location.search);
 const personId = params.get('personId');
 const code     = params.get('code');
-const mode     = params.get('mode'); // 'manage' = bestehende Bestellung
+const mode     = params.get('mode');
 
 const personCard     = document.getElementById('personCard');
 const personInfo     = document.getElementById('personInfo');
@@ -31,6 +31,247 @@ function esc(str) {
   return String(str ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ── Manage-Mode styles (injected once) ───────────────────────────────────
+function injectManageStyles() {
+  if (document.getElementById('manageStyles')) return;
+  const s = document.createElement('style');
+  s.id = 'manageStyles';
+  s.textContent = `
+    /* Tab bar */
+    .m-tabs {
+      display: flex;
+      gap: .25rem;
+      border-bottom: 2px solid var(--border);
+      margin-bottom: 1.5rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .m-tabs::-webkit-scrollbar { display: none; }
+    .m-tab {
+      padding: .55rem 1.1rem;
+      font-size: .875rem;
+      font-weight: 600;
+      color: var(--muted);
+      border: none;
+      background: none;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      cursor: pointer;
+      white-space: nowrap;
+      min-height: 44px;
+      transition: color var(--ease), border-color var(--ease);
+    }
+    .m-tab:hover  { color: var(--text); }
+    .m-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .m-pane { display: none; }
+    .m-pane.active { display: block; }
+
+    /* Status banners */
+    .status-paid {
+      background: var(--success-bg);
+      color: var(--success);
+      border-left: 4px solid var(--success);
+      border-radius: var(--radius);
+      padding: .85rem 1rem;
+      font-weight: 600;
+      margin-bottom: 1.25rem;
+    }
+    .status-partial {
+      background: var(--warning-bg);
+      color: var(--warning);
+      border-left: 4px solid var(--warning);
+      border-radius: var(--radius);
+      padding: .85rem 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    /* Payment info box */
+    .pay-box {
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 1.25rem;
+    }
+    .pay-box-header {
+      background: var(--primary-light);
+      padding: .6rem 1rem;
+      font-size: .8rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .pay-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: .6rem 1rem;
+      border-bottom: 1px solid var(--border);
+      font-size: .9rem;
+      gap: .5rem;
+    }
+    .pay-row:last-child { border-bottom: none; }
+    .pay-row-label { color: var(--muted); font-size: .82rem; white-space: nowrap; }
+    .pay-row-value { font-weight: 600; text-align: right; word-break: break-all; }
+    .pay-row-value code {
+      font-family: 'Courier New', monospace;
+      font-size: .85rem;
+      background: var(--primary-light);
+      padding: .1rem .4rem;
+      border-radius: 4px;
+    }
+    .pay-amount {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--primary);
+    }
+
+    /* QR wrapper */
+    .qr-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1rem 0 .5rem;
+      gap: .5rem;
+    }
+    .qr-center img {
+      width: 180px;
+      height: 180px;
+      border-radius: var(--radius);
+      border: 1.5px solid var(--border);
+      display: block;
+    }
+    .qr-label {
+      font-size: .78rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    /* Split toggle row */
+    .split-toggle-row {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      padding: .8rem 1rem;
+      background: var(--card-2);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 1.25rem;
+      flex-wrap: wrap;
+    }
+    .split-toggle-row input[type=checkbox] {
+      width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary);
+    }
+    .split-toggle-row label { cursor: pointer; margin: 0; font-weight: 500; }
+    .split-toggle-row .sub { font-size: .82rem; color: var(--muted); }
+
+    /* Ticket cards */
+    .t-card {
+      background: var(--card-2);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+      margin-bottom: .85rem;
+    }
+    .t-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .5rem;
+      flex-wrap: wrap;
+      margin-bottom: .5rem;
+    }
+    .t-card-title { font-weight: 700; font-size: .975rem; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: .25rem;
+      padding: .18rem .65rem;
+      border-radius: var(--radius-full);
+      font-size: .75rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .chip-paid    { background: var(--success-bg); color: var(--success); }
+    .chip-pending { background: var(--warning-bg); color: var(--warning); }
+
+    /* QR sub-tabs (pill style) */
+    .qr-subtabs {
+      display: flex;
+      gap: .4rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    .qr-subtab {
+      padding: .35rem .9rem;
+      border-radius: var(--radius-full);
+      border: 1.5px solid var(--border);
+      background: var(--card-2);
+      font-size: .85rem;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all var(--ease);
+      min-height: 36px;
+    }
+    .qr-subtab:hover  { border-color: var(--primary); color: var(--primary); }
+    .qr-subtab.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .qr-subpane { display: none; }
+    .qr-subpane.active { display: block; }
+
+    /* Edit-mode form */
+    .edit-form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .75rem;
+      margin-top: .6rem;
+    }
+    @media (max-width: 520px) { .edit-form-row { grid-template-columns: 1fr; } }
+    .edit-actions {
+      display: flex;
+      gap: .5rem;
+      margin-top: .75rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .t-meta { font-size: .875rem; color: var(--muted); margin-top: .2rem; }
+    .t-meta code {
+      font-size: .8rem;
+      background: var(--primary-light);
+      padding: .1rem .35rem;
+      border-radius: 4px;
+    }
+
+    /* Add ticket form */
+    .add-form {
+      background: var(--card-2);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .add-form h4 { font-size: .9rem; font-weight: 700; margin-bottom: .75rem; }
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: .5rem;
+      margin-bottom: 1rem;
+    }
+    .section-header h3 { font-size: 1rem; font-weight: 700; margin: 0; }
+    .btn-sm {
+      padding: .4rem .9rem;
+      font-size: .825rem;
+      min-height: 36px;
+    }
+    .feedback-ok  { color: var(--success); font-size: .85rem; }
+    .feedback-err { color: var(--danger);  font-size: .85rem; }
+  `;
+  document.head.appendChild(s);
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
@@ -78,14 +319,13 @@ async function init() {
   }
 }
 
-// ── Manage-Mode: bestehende Bestellung laden ─────────────────────────────
+// ── Manage-Mode laden ─────────────────────────────────────────────────────
 async function loadManageMode() {
   try {
     const res  = await fetch(`/api/tickets/my-order?code=${encodeURIComponent(code)}`);
     const data = await res.json();
 
     if (!res.ok) {
-      // Noch keine Bestellung → Bestellformular zeigen
       personInfo.innerHTML =
         `<strong>${esc(person.name)}</strong> &nbsp;|&nbsp; Zugangscode: <code>${esc(code)}</code>` +
         ` &nbsp;|&nbsp; Verfügbare Tickets: <strong>${esc(String(person.num_tickets))}</strong>`;
@@ -99,109 +339,82 @@ async function loadManageMode() {
 
     orderCard.style.display   = 'none';
     paymentCard.style.display = 'block';
-
-    renderManageTabs(data);
+    renderManage(data);
 
   } catch (err) {
     showAlert(alertBox, 'Verbindungsfehler beim Laden der Bestellung.', 'danger');
   }
 }
 
-// ── Tab-Styles einmalig injizieren ────────────────────────────────────────
-function injectTabStyles() {
-  if (document.getElementById('tabStyles')) return;
-  const style = document.createElement('style');
-  style.id = 'tabStyles';
-  style.textContent = `
-    .manage-tabs { display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:1.25rem; border-bottom:2px solid #e0e0e0; padding-bottom:.5rem; }
-    .tab-btn { background:none; border:none; padding:.5rem 1.1rem; border-radius:6px 6px 0 0; cursor:pointer; font-size:.95rem; color:#555; font-weight:500; transition:background .15s,color .15s; }
-    .tab-btn:hover { background:#f0f0f0; color:#222; }
-    .tab-btn.active { background:#fff; color:#1a7a6e; border:2px solid #e0e0e0; border-bottom:2px solid #fff; margin-bottom:-2px; font-weight:700; }
-    .ticket-qr-card { background:#f9f9f9; border-radius:10px; padding:1rem; margin-bottom:.85rem; box-shadow:0 1px 4px rgba(0,0,0,.07); }
-    .paid-chip { display:inline-block; background:#27ae60; color:#fff; border-radius:20px; font-size:.78rem; padding:.15rem .65rem; margin-left:.5rem; vertical-align:middle; }
-    .pending-chip { display:inline-block; background:#e67e22; color:#fff; border-radius:20px; font-size:.78rem; padding:.15rem .65rem; margin-left:.5rem; vertical-align:middle; }
-    .qr-tabs { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:1rem; }
-    .qr-tab-btn { background:#f0f0f0; border:1.5px solid #ddd; padding:.35rem .9rem; border-radius:20px; cursor:pointer; font-size:.88rem; color:#444; font-weight:500; transition:background .15s,color .15s,border-color .15s; }
-    .qr-tab-btn:hover { background:#e0e0e0; }
-    .qr-tab-btn.active { background:#1a7a6e; color:#fff; border-color:#1a7a6e; }
-    .qr-ticket-panel { display:none; }
-    .qr-ticket-panel.active { display:block; }
-  `;
-  document.head.appendChild(style);
-}
-
-// ── Manage-Mode: Tabs rendern ─────────────────────────────────────────────
-function renderManageTabs(data) {
-  injectTabStyles();
+// ── Manage-Wrapper rendern ────────────────────────────────────────────────
+function renderManage(data) {
+  injectManageStyles();
 
   paymentCard.innerHTML = `
-    <div class="manage-tabs">
-      <button class="tab-btn active" data-tab="payment">Zahlung</button>
-      <button class="tab-btn" data-tab="tickets">Meine QR-Codes</button>
-      <button class="tab-btn" data-tab="edit">Angaben ändern</button>
+    <div class="m-tabs">
+      <button class="m-tab active" data-pane="payment">Zahlung</button>
+      <button class="m-tab" data-pane="qrcodes">Meine QR-Codes</button>
+      <button class="m-tab" data-pane="edit">Angaben ändern</button>
     </div>
-    <div class="tab-content" id="tab-payment"></div>
-    <div class="tab-content" id="tab-tickets" style="display:none"></div>
-    <div class="tab-content" id="tab-edit" style="display:none"></div>
+    <div id="m-payment" class="m-pane active"></div>
+    <div id="m-qrcodes" class="m-pane"></div>
+    <div id="m-edit"    class="m-pane"></div>
   `;
 
-  paymentCard.querySelectorAll('.tab-btn').forEach(btn => {
+  paymentCard.querySelectorAll('.m-tab').forEach(btn => {
     btn.addEventListener('click', () => {
-      paymentCard.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      paymentCard.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+      paymentCard.querySelectorAll('.m-tab').forEach(b => b.classList.remove('active'));
+      paymentCard.querySelectorAll('.m-pane').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
-      document.getElementById(`tab-${btn.dataset.tab}`).style.display = 'block';
+      document.getElementById(`m-${btn.dataset.pane}`).classList.add('active');
     });
   });
 
-  renderTabPayment(data);
-  renderTabQrCodes(data);
-  renderTabEdit(data);
+  renderPaymentPane(data);
+  renderQrPane(data);
+  renderEditPane(data);
 }
 
 // ── Tab: Zahlung ──────────────────────────────────────────────────────────
-function renderTabPayment(data) {
-  const tab = document.getElementById('tab-payment');
-  const order = data.order;
-  const paidAmount   = parseFloat(data.paidAmount   || 0);
-  const remainingEur = parseFloat(data.remainingEur || 0);
-  const totalEur     = parseFloat(order.total_eur);
-
-  const fullyPaid = order.paid === 1;
-  const partial   = order.paid === 2;
+function renderPaymentPane(data) {
+  const pane       = document.getElementById('m-payment');
+  const order      = data.order;
+  const paidAmount = parseFloat(data.paidAmount   || 0);
+  const remEur     = parseFloat(data.remainingEur || 0);
+  const totalEur   = parseFloat(order.total_eur);
+  const fullyPaid  = order.paid === 1;
+  const partial    = order.paid === 2;
 
   let statusHtml = '';
   if (fullyPaid) {
-    statusHtml = `<div style="background:#d4f5e2;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;color:#1a7a2a;font-weight:600">✅ Vollständig bezahlt – Tickets wurden per E-Mail verschickt.</div>`;
+    statusHtml = `<div class="status-paid">✅ Vollständig bezahlt – Tickets wurden per E-Mail verschickt.</div>`;
   } else if (partial) {
-    statusHtml = `<div style="background:#fff3cd;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;color:#856404;font-weight:500">⚠️ Teilzahlung erhalten: <strong>${fmt(paidAmount)}</strong> von <strong>${fmt(totalEur)}</strong> – noch ausstehend: <strong>${fmt(remainingEur)}</strong></div>`;
+    statusHtml = `<div class="status-partial">⚠️ Teilzahlung erhalten: <strong>${fmt(paidAmount)}</strong> von <strong>${fmt(totalEur)}</strong> – noch ausstehend: <strong>${fmt(remEur)}</strong></div>`;
   }
 
-  // Split-Toggle: nur wenn noch nicht vollständig bezahlt
-  let splitToggleHtml = '';
+  let splitToggle = '';
   if (!fullyPaid) {
-    splitToggleHtml = `
-      <div style="margin:1rem 0;padding:.75rem 1rem;background:#f0f7ff;border-radius:8px;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
-        <input type="checkbox" id="splitToggle" style="width:18px;height:18px;cursor:pointer" ${order.split_payment ? 'checked' : ''}>
-        <label for="splitToggle" style="cursor:pointer;margin:0;font-weight:500">
-          <strong>Separat zahlen</strong>
-          <span style="font-weight:400;font-size:.85rem;color:#555"> – jede Person überweist ihr Ticket einzeln</span>
+    splitToggle = `
+      <div class="split-toggle-row">
+        <input type="checkbox" id="splitToggle" ${order.split_payment ? 'checked' : ''}>
+        <label for="splitToggle">
+          Separat zahlen
+          <span class="sub"> – jede Person überweist ihr Ticket einzeln</span>
         </label>
-        <span id="splitSpinner" style="display:none;font-size:.85rem;color:#888">Lädt…</span>
+        <span id="splitSpinner" style="display:none;font-size:.82rem;color:var(--muted)">Lädt…</span>
       </div>
     `;
   }
 
-  // Anzeige-Betrag: Restbetrag bei Teilzahlung, sonst Gesamtbetrag
-  const displayAmount = partial ? remainingEur : totalEur;
+  const displayAmount = partial ? remEur : totalEur;
 
-  tab.innerHTML = `
+  pane.innerHTML = `
     ${statusHtml}
-    ${splitToggleHtml}
-    <div id="paymentDetails">
-      ${renderPaymentDetails(data, displayAmount)}
-    </div>
+    ${splitToggle}
+    <div id="paymentDetails"></div>
   `;
+
+  renderPaymentDetails(data, displayAmount);
 
   if (!fullyPaid) {
     document.getElementById('splitToggle')
@@ -210,39 +423,73 @@ function renderTabPayment(data) {
 }
 
 function renderPaymentDetails(data, displayAmount) {
+  const el    = document.getElementById('paymentDetails');
   const order = data.order;
 
   if (order.split_payment) {
-    let html = `<p style="margin-bottom:.75rem"><strong>Separat zahlen – jede Person überweist ihr Ticket einzeln:</strong></p>`;
+    let html = '';
     data.tickets.forEach((t, i) => {
       if (!t.split_ref) return;
       const isPaid = !!t.ticket_paid;
       html += `
-        <div class="ticket-qr-card">
-          <strong>Ticket ${i + 1} – ${esc(t.ticket_name)}</strong>
-          ${isPaid ? '<span class="paid-chip">✓ Bezahlt</span>' : '<span class="pending-chip">Ausstehend</span>'}
+        <div class="t-card">
+          <div class="t-card-header">
+            <span class="t-card-title">Ticket ${i + 1} – ${esc(t.ticket_name)}</span>
+            ${isPaid
+              ? '<span class="chip chip-paid">✓ Bezahlt</span>'
+              : '<span class="chip chip-pending">Ausstehend</span>'}
+          </div>
           ${!isPaid ? `
-            <div style="margin-top:.5rem;font-size:.9rem">
-              <div>Betrag: <strong>${fmt(data.config.price)}</strong></div>
-              <div>Referenz: <code>${esc(t.split_ref)}</code></div>
+            <div class="pay-box">
+              <div class="pay-box-header">Zahlungsdetails</div>
+              <div class="pay-row">
+                <span class="pay-row-label">Betrag</span>
+                <span class="pay-row-value pay-amount">${fmt(data.config.price)}</span>
+              </div>
+              <div class="pay-row">
+                <span class="pay-row-label">Referenz</span>
+                <span class="pay-row-value"><code>${esc(t.split_ref)}</code></span>
+              </div>
             </div>
-            ${t.splitEpcQr ? `<img src="${t.splitEpcQr}" alt="Zahle QR ${i+1}" style="margin-top:.5rem;max-width:160px;border-radius:6px">` : ''}
-          ` : '<div style="margin-top:.35rem;font-size:.88rem;color:#555">✅ Zahlung eingegangen – Ticket wurde per E-Mail zugestellt.</div>'}
+            ${t.splitEpcQr ? `
+              <div class="qr-center">
+                <img src="${t.splitEpcQr}" alt="Zahlung QR Ticket ${i+1}">
+                <span class="qr-label">Mit Banking-App scannen</span>
+              </div>` : ''}
+          ` : `<p class="t-meta" style="margin-top:.25rem">✅ Zahlung eingegangen – Ticket wurde per E-Mail zugestellt.</p>`}
         </div>
       `;
     });
-    return html;
+    el.innerHTML = html || '<p style="color:var(--muted)">Keine Split-Tickets gefunden.</p>';
+    return;
   }
 
   // Gemeinsame Überweisung
-  return `
-    <div style="margin-bottom:.5rem">
-      <div style="margin-bottom:.35rem">Betrag: <strong style="font-size:1.1rem">${fmt(displayAmount)}</strong></div>
-      <div>IBAN: <strong>${esc(data.config.iban)}</strong></div>
-      <div>Empfänger: <strong>${esc(data.config.accountName)}</strong></div>
-      <div>Referenz: <code>${esc(data.reference)}</code></div>
+  el.innerHTML = `
+    <div class="pay-box">
+      <div class="pay-box-header">Zahlungsdetails</div>
+      <div class="pay-row">
+        <span class="pay-row-label">Betrag</span>
+        <span class="pay-row-value pay-amount">${fmt(displayAmount)}</span>
+      </div>
+      <div class="pay-row">
+        <span class="pay-row-label">Empfänger</span>
+        <span class="pay-row-value">${esc(data.config.accountName)}</span>
+      </div>
+      <div class="pay-row">
+        <span class="pay-row-label">IBAN</span>
+        <span class="pay-row-value"><code>${esc(data.config.iban)}</code></span>
+      </div>
+      <div class="pay-row">
+        <span class="pay-row-label">Referenz</span>
+        <span class="pay-row-value"><code>${esc(data.reference)}</code></span>
+      </div>
     </div>
-    ${data.epcQr ? `<div style="margin-top:.75rem"><img src="${data.epcQr}" alt="Zahle QR" style="max-width:160px;border-radius:8px"></div>` : ''}
+    ${data.epcQr ? `
+      <div class="qr-center">
+        <img src="${data.epcQr}" alt="Zahlung QR-Code">
+        <span class="qr-label">Mit Banking-App scannen</span>
+      </div>` : ''}
   `;
 }
 
@@ -275,107 +522,100 @@ async function toggleSplit(enable, data) {
     data.tickets.forEach(t => { t.split_ref = null; t.splitEpcQr = null; });
   }
 
-  const paidAmount   = parseFloat(data.paidAmount   || 0);
-  const remainingEur = parseFloat(data.remainingEur || 0);
-  const totalEur     = parseFloat(data.order.total_eur);
-  const displayAmount = data.order.paid === 2 ? remainingEur : totalEur;
-
-  const detailsEl = document.getElementById('paymentDetails');
-  if (detailsEl) detailsEl.innerHTML = renderPaymentDetails(data, displayAmount);
+  const remEur        = parseFloat(data.remainingEur || 0);
+  const totalEur      = parseFloat(data.order.total_eur);
+  const displayAmount = data.order.paid === 2 ? remEur : totalEur;
+  renderPaymentDetails(data, displayAmount);
   if (spinner) spinner.style.display = 'none';
 }
 
-// ── Tab: QR-Codes (3 Tabs für bis zu N Tickets) ──────────────────────────
-function renderTabQrCodes(data) {
-  const tab = document.getElementById('tab-tickets');
+// ── Tab: QR-Codes ─────────────────────────────────────────────────────────
+function renderQrPane(data) {
+  const pane      = document.getElementById('m-qrcodes');
+  const fullyPaid = data.order.paid === 1;
+
   if (!data.tickets || !data.tickets.length) {
-    tab.innerHTML = '<p style="color:#888">Keine Tickets gefunden.</p>';
+    pane.innerHTML = '<p style="color:var(--muted)">Keine Tickets gefunden.</p>';
     return;
   }
 
-  const fullyPaid = data.order.paid === 1;
-
-  // Warn-Banner wenn noch nicht vollständig bezahlt
-  let warnHtml = '';
+  let warn = '';
   if (!fullyPaid) {
-    warnHtml = `<div style="background:#fff3cd;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;color:#856404;font-size:.9rem">⚠️ QR-Codes werden erst nach vollständiger Bezahlung per E-Mail zugestellt. Die Vorschau hier ist nur zur Kontrolle.</div>`;
+    warn = `<div class="alert alert-warning" style="margin-bottom:1.25rem">⚠️ QR-Codes sind erst nach vollständiger Bezahlung gültig und werden dann per E-Mail zugestellt. Die Vorschau hier dient nur zur Kontrolle.</div>`;
   }
 
-  // Ticket-Tabs (ein Tab pro Ticket)
-  const tabBtns = data.tickets.map((t, i) =>
-    `<button class="qr-tab-btn${i === 0 ? ' active' : ''}" data-qrtab="${i}">Ticket ${i + 1}</button>`
+  const subtabBtns = data.tickets.map((t, i) =>
+    `<button class="qr-subtab${i === 0 ? ' active' : ''}" data-qi="${i}">Ticket ${i + 1}</button>`
   ).join('');
 
   const panels = data.tickets.map((t, i) => {
     const isPaid = fullyPaid || !!t.ticket_paid;
     const qrHtml = t.ticketQrDataUrl
-      ? `<div style="margin-top:.75rem"><img src="${t.ticketQrDataUrl}" alt="QR-Code Ticket ${i+1}" style="max-width:200px;border-radius:8px;border:1px solid #eee"></div>`
-      : `<div style="margin-top:.75rem;color:#999;font-size:.9rem">QR-Code wird nach Bezahlung generiert.</div>`;
+      ? `<div class="qr-center"><img src="${t.ticketQrDataUrl}" alt="QR-Code Ticket ${i + 1}"><span class="qr-label">${esc(t.ticket_name)}</span></div>`
+      : `<p style="color:var(--muted);font-size:.875rem;margin-top:.75rem">QR-Code wird nach Bezahlung generiert.</p>`;
 
     return `
-      <div class="qr-ticket-panel${i === 0 ? ' active' : ''}" data-qrpanel="${i}">
-        <div class="ticket-qr-card">
-          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:.35rem">
-            <strong style="font-size:1.05rem">Ticket ${i + 1} – ${esc(t.ticket_name)}</strong>
-            ${isPaid ? '<span class="paid-chip">✓ Bezahlt</span>' : '<span class="pending-chip">Ausstehend</span>'}
+      <div class="qr-subpane${i === 0 ? ' active' : ''}" data-qp="${i}">
+        <div class="t-card">
+          <div class="t-card-header">
+            <span class="t-card-title">${esc(t.ticket_name)}</span>
+            ${isPaid
+              ? '<span class="chip chip-paid">✓ Bezahlt</span>'
+              : '<span class="chip chip-pending">Ausstehend</span>'}
           </div>
-          <div style="margin-top:.35rem;color:#555;font-size:.9rem">${esc(t.ticket_email || '–')}</div>
-          ${t.split_ref ? `<div style="margin-top:.2rem;font-size:.82rem;color:#777">Referenz: <code>${esc(t.split_ref)}</code></div>` : ''}
+          <div class="t-meta">${esc(t.ticket_email || '–')}</div>
+          ${t.split_ref ? `<div class="t-meta">Referenz: <code>${esc(t.split_ref)}</code></div>` : ''}
           ${qrHtml}
         </div>
       </div>
     `;
   }).join('');
 
-  tab.innerHTML = `
-    ${warnHtml}
-    <div class="qr-tabs">${tabBtns}</div>
-    ${panels}
-  `;
+  pane.innerHTML = `${warn}<div class="qr-subtabs">${subtabBtns}</div>${panels}`;
 
-  // Tab-Switching
-  tab.querySelectorAll('.qr-tab-btn').forEach(btn => {
+  pane.querySelectorAll('.qr-subtab').forEach(btn => {
     btn.addEventListener('click', () => {
-      tab.querySelectorAll('.qr-tab-btn').forEach(b => b.classList.remove('active'));
-      tab.querySelectorAll('.qr-ticket-panel').forEach(p => p.classList.remove('active'));
+      pane.querySelectorAll('.qr-subtab').forEach(b => b.classList.remove('active'));
+      pane.querySelectorAll('.qr-subpane').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
-      tab.querySelector(`[data-qrpanel="${btn.dataset.qrtab}"]`).classList.add('active');
+      pane.querySelector(`[data-qp="${btn.dataset.qi}"]`).classList.add('active');
     });
   });
 }
 
 // ── Tab: Angaben ändern ───────────────────────────────────────────────────
-function renderTabEdit(data) {
-  const tab    = document.getElementById('tab-edit');
+function renderEditPane(data) {
+  const pane   = document.getElementById('m-edit');
   const canAdd = !data.order.paid && data.remainingSlots > 0;
 
-  tab.innerHTML = `
+  pane.innerHTML = `
     <div id="manageAlertBox" style="margin-bottom:.75rem"></div>
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem">
-      <h3 style="margin:0">Ticket-Angaben</h3>
+    <div class="section-header">
+      <h3>Ticket-Angaben</h3>
       <div style="display:flex;gap:.5rem;flex-wrap:wrap">
-        ${canAdd ? `<button id="addTicketBtn" class="btn btn-secondary" style="min-width:140px">Ticket hinzufügen</button>` : ''}
-        <button id="toggleEditBtn" class="btn btn-primary" style="min-width:160px">Angaben ändern</button>
+        ${canAdd ? `<button id="addTicketBtn" class="btn btn-outline-dark btn-sm">Ticket hinzufügen</button>` : ''}
+        <button id="toggleEditBtn" class="btn btn-primary btn-sm">Angaben bearbeiten</button>
       </div>
     </div>
     ${canAdd ? `
-      <div id="addTicketForm" style="display:none;margin-bottom:1rem;padding:1rem;background:#f0f7ff;border-radius:8px">
-        <strong>Neues Ticket hinzufügen</strong>
-        <div class="form-group" style="margin-top:.5rem">
-          <label>Name</label>
-          <input id="addTicketName" type="text" placeholder="Vollständiger Name" autocomplete="name">
+      <div id="addTicketForm" class="add-form" style="display:none">
+        <h4>Neues Ticket</h4>
+        <div class="edit-form-row">
+          <div class="form-group" style="margin-bottom:0">
+            <label>Name</label>
+            <input id="addTicketName" type="text" placeholder="Vollständiger Name" autocomplete="name">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>E-Mail</label>
+            <input id="addTicketEmail" type="email" placeholder="name@beispiel.de" autocomplete="email">
+          </div>
         </div>
-        <div class="form-group">
-          <label>E-Mail</label>
-          <input id="addTicketEmail" type="email" placeholder="name@beispiel.de" autocomplete="email">
-        </div>
-        <div style="display:flex;gap:.5rem;margin-top:.5rem">
-          <button id="addTicketSaveBtn" class="btn btn-primary">Hinzufügen</button>
-          <button id="addTicketCancelBtn" class="btn btn-secondary">Abbrechen</button>
+        <div class="edit-actions">
+          <button id="addTicketSaveBtn" class="btn btn-primary btn-sm">Hinzufügen</button>
+          <button id="addTicketCancelBtn" class="btn btn-outline-dark btn-sm">Abbrechen</button>
         </div>
         <div id="addTicketFeedback" style="margin-top:.5rem"></div>
-      </div>
-    ` : ''}
+      </div>` : ''}
     <div id="ticketList"></div>
   `;
 
@@ -386,7 +626,8 @@ function renderTabEdit(data) {
     const editing = btn.dataset.editing === 'true';
     renderTicketList(currentTickets, !editing);
     btn.dataset.editing = String(!editing);
-    btn.textContent = !editing ? 'Abbrechen' : 'Angaben ändern';
+    btn.textContent = !editing ? 'Abbrechen' : 'Angaben bearbeiten';
+    btn.className   = !editing ? 'btn btn-outline-dark btn-sm' : 'btn btn-primary btn-sm';
   });
 
   if (canAdd) {
@@ -403,7 +644,7 @@ function renderTabEdit(data) {
   }
 }
 
-// ── Ticket hinzufügen (Manage-Mode) ──────────────────────────────────────
+// ── Ticket hinzufügen ─────────────────────────────────────────────────────
 async function addTicket() {
   const nameInput  = document.getElementById('addTicketName');
   const emailInput = document.getElementById('addTicketEmail');
@@ -413,13 +654,9 @@ async function addTicket() {
   const ticketName  = nameInput.value.trim();
   const ticketEmail = emailInput.value.trim();
 
-  if (!ticketName) {
-    feedback.innerHTML = '<span style="color:red">Name darf nicht leer sein.</span>';
-    return;
-  }
+  if (!ticketName) { feedback.innerHTML = '<span class="feedback-err">Name darf nicht leer sein.</span>'; return; }
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ticketEmail)) {
-    feedback.innerHTML = '<span style="color:red">Ungültige E-Mail-Adresse.</span>';
-    return;
+    feedback.innerHTML = '<span class="feedback-err">Ungültige E-Mail-Adresse.</span>'; return;
   }
 
   saveBtn.disabled    = true;
@@ -428,37 +665,33 @@ async function addTicket() {
 
   try {
     const res = await fetch(`/api/tickets/order/${currentOrder.id}/add`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ code, ticketName, ticketEmail }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, ticketName, ticketEmail }),
     });
     const data = await res.json();
 
     if (!res.ok) {
-      feedback.innerHTML = `<span style="color:red">${esc(data.message || data.error)}</span>`;
+      feedback.innerHTML = `<span class="feedback-err">${esc(data.message || data.error)}</span>`;
       return;
     }
 
     currentTickets.push(data.ticket);
     currentOrder.total_eur = data.newTotalEur;
-
     nameInput.value  = '';
     emailInput.value = '';
     document.getElementById('addTicketForm').style.display = 'none';
     document.getElementById('addTicketBtn').style.display  = '';
-
     renderTicketList(currentTickets, false);
     showAlert(document.getElementById('manageAlertBox'), 'Ticket erfolgreich hinzugefügt.', 'success');
-
   } catch {
-    feedback.innerHTML = '<span style="color:red">Verbindungsfehler.</span>';
+    feedback.innerHTML = '<span class="feedback-err">Verbindungsfehler.</span>';
   } finally {
     saveBtn.disabled    = false;
     saveBtn.textContent = 'Hinzufügen';
   }
 }
 
-// ── Ticket-Liste rendern ─────────────────────────────────────────────────
+// ── Ticket-Liste rendern ──────────────────────────────────────────────────
 function renderTicketList(tickets, editMode) {
   const container = document.getElementById('ticketList');
   if (!container) return;
@@ -466,57 +699,56 @@ function renderTicketList(tickets, editMode) {
 
   tickets.forEach((ticket, i) => {
     const div = document.createElement('div');
-    div.style.cssText = 'background:#f9f9f9;border-radius:10px;padding:1rem;margin-bottom:.75rem;box-shadow:0 1px 3px rgba(0,0,0,.06)';
+    div.className = 't-card';
     div.dataset.ticketId = ticket.id;
 
     if (editMode) {
       div.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem">
-          <strong>Ticket ${i + 1}</strong>
-          ${!currentOrder.paid ? `<button class="btn btn-danger delete-ticket-btn" style="padding:.25rem .75rem;font-size:.85rem" title="Ticket löschen">Löschen</button>` : ''}
+        <div class="t-card-header">
+          <span class="t-card-title">Ticket ${i + 1}</span>
+          ${!currentOrder.paid
+            ? `<button class="btn btn-danger btn-sm delete-ticket-btn">Löschen</button>`
+            : ''}
         </div>
-        <div class="form-group" style="margin-top:.5rem">
-          <label>Name</label>
-          <input class="edit-name" type="text" value="${esc(ticket.ticket_name)}" required>
+        <div class="edit-form-row">
+          <div class="form-group" style="margin-bottom:0">
+            <label>Name</label>
+            <input class="edit-name" type="text" value="${esc(ticket.ticket_name)}" required>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>E-Mail</label>
+            <input class="edit-email" type="email" value="${esc(ticket.ticket_email || '')}" required>
+          </div>
         </div>
-        <div class="form-group">
-          <label>E-Mail</label>
-          <input class="edit-email" type="email" value="${esc(ticket.ticket_email || '')}" required>
+        <div class="edit-actions">
+          <button class="btn btn-primary btn-sm save-ticket-btn">Speichern</button>
+          <span class="ticket-feedback"></span>
         </div>
-        <div style="display:flex;gap:.5rem;margin-top:.5rem;flex-wrap:wrap">
-          <button class="btn btn-primary save-ticket-btn" style="min-width:100px">Speichern</button>
-        </div>
-        <div class="ticket-feedback" style="margin-top:.5rem"></div>
       `;
       div.querySelector('.save-ticket-btn').addEventListener('click', () => saveTicket(div, ticket));
-      const deleteBtn = div.querySelector('.delete-ticket-btn');
-      if (deleteBtn) deleteBtn.addEventListener('click', () => confirmDeleteTicket(ticket, i));
+      const del = div.querySelector('.delete-ticket-btn');
+      if (del) del.addEventListener('click', () => confirmDeleteTicket(ticket, i));
     } else {
       div.innerHTML = `
-        <strong>Ticket ${i + 1}</strong>
-        <div style="margin-top:.4rem;color:#555">
-          <div>${esc(ticket.ticket_name)}</div>
-          <div>${esc(ticket.ticket_email || '–')}</div>
-          ${ticket.split_ref ? `<div style="margin-top:.25rem;font-size:.85rem">Referenz: <code>${esc(ticket.split_ref)}</code></div>` : ''}
+        <div class="t-card-header">
+          <span class="t-card-title">Ticket ${i + 1}</span>
         </div>
+        <div class="t-meta">${esc(ticket.ticket_name)}</div>
+        <div class="t-meta">${esc(ticket.ticket_email || '–')}</div>
+        ${ticket.split_ref ? `<div class="t-meta">Referenz: <code>${esc(ticket.split_ref)}</code></div>` : ''}
       `;
     }
     container.appendChild(div);
   });
 }
 
-// ── Ticket löschen ───────────────────────────────────────────────────────
+// ── Ticket löschen ────────────────────────────────────────────────────────
 async function confirmDeleteTicket(ticket, index) {
   const manageAlert = document.getElementById('manageAlertBox');
-
   if (currentTickets.length <= 1) {
-    showAlert(manageAlert,
-      'Mindestens ein Ticket muss in der Bestellung verbleiben. Wende dich an das Orga-Team, um die gesamte Bestellung zu stornieren.',
-      'warning'
-    );
+    showAlert(manageAlert, 'Mindestens ein Ticket muss in der Bestellung verbleiben.', 'warning');
     return;
   }
-
   if (!confirm(`Ticket ${index + 1} (${ticket.ticket_name}) wirklich löschen?`)) return;
 
   try {
@@ -525,7 +757,6 @@ async function confirmDeleteTicket(ticket, index) {
       { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) }
     );
     const data = await res.json();
-
     if (res.status === 409 && data.error === 'paid_order') {
       showAlert(manageAlert, 'Diese Bestellung wurde bereits bezahlt. Bitte wende dich an das Orga-Team.', 'danger');
       return;
@@ -538,14 +769,12 @@ async function confirmDeleteTicket(ticket, index) {
 
     currentTickets = currentTickets.filter(t => t.id !== ticket.id);
     currentOrder.total_eur = data.newTotalEur;
-
     renderTicketList(currentTickets, true);
     showAlert(manageAlert, 'Ticket erfolgreich gelöscht.', 'success');
-
-  } catch { showAlert(manageAlert, 'Verbindungsfehler beim Löschen.', 'danger'); }
+  } catch { showAlert(manageAlert, 'Verbindungsfehler.', 'danger'); }
 }
 
-// ── Ticket speichern (PATCH) ─────────────────────────────────────────────
+// ── Ticket speichern ──────────────────────────────────────────────────────
 async function saveTicket(div, ticket) {
   const nameInput  = div.querySelector('.edit-name');
   const emailInput = div.querySelector('.edit-email');
@@ -555,9 +784,9 @@ async function saveTicket(div, ticket) {
   const ticketName  = nameInput.value.trim();
   const ticketEmail = emailInput.value.trim();
 
-  if (!ticketName) { feedback.innerHTML = '<span style="color:red">Name darf nicht leer sein.</span>'; return; }
+  if (!ticketName) { feedback.innerHTML = '<span class="feedback-err">Name darf nicht leer sein.</span>'; return; }
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ticketEmail)) {
-    feedback.innerHTML = '<span style="color:red">Ungültige E-Mail-Adresse.</span>'; return;
+    feedback.innerHTML = '<span class="feedback-err">Ungültige E-Mail-Adresse.</span>'; return;
   }
 
   saveBtn.disabled    = true;
@@ -570,70 +799,69 @@ async function saveTicket(div, ticket) {
       { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, ticketName, ticketEmail }) }
     );
     const data = await res.json();
-
-    if (!res.ok) { feedback.innerHTML = `<span style="color:red">${esc(data.error)}</span>`; return; }
+    if (!res.ok) { feedback.innerHTML = `<span class="feedback-err">${esc(data.error)}</span>`; return; }
 
     ticket.ticket_name  = ticketName;
     ticket.ticket_email = ticketEmail;
-    feedback.innerHTML  = '<span style="color:green">✓ Gespeichert</span>';
+    feedback.innerHTML  = '<span class="feedback-ok">✓ Gespeichert</span>';
 
     const manageAlert = document.getElementById('manageAlertBox');
     if (data.paid && (data.nameChanged || data.emailChanged)) {
       if (data.emailResent) {
-        showAlert(manageAlert, '✅ Angaben geändert – ein aktualisiertes Ticket wurde automatisch an die hinterlegte E-Mail-Adresse gesendet.', 'success');
+        showAlert(manageAlert, '✅ Angaben geändert – ein aktualisiertes Ticket wurde an die neue E-Mail-Adresse gesendet.', 'success');
       } else {
         showAlert(manageAlert, '⚠️ Angaben geändert, aber E-Mail-Versand fehlgeschlagen. Bitte Orga-Team kontaktieren.', 'warning');
       }
     }
-  } catch { feedback.innerHTML = '<span style="color:red">Verbindungsfehler.</span>'; }
+  } catch { feedback.innerHTML = '<span class="feedback-err">Verbindungsfehler.</span>'; }
   finally {
     saveBtn.disabled    = false;
     saveBtn.textContent = 'Speichern';
   }
 }
 
-// ── Ticket-Formulare aufbauen (fresh order) ──────────────────────────────
+// ── Ticket-Formulare (fresh order) ────────────────────────────────────────
 function buildTicketForms(count) {
   ticketForms.innerHTML = '';
 
   const hint = document.createElement('p');
-  hint.style.cssText = 'color:#666;font-size:.9rem;margin-bottom:.75rem';
-  hint.textContent = `Du kannst 1 bis ${count} Ticket(s) bestellen. Felder die du leer lässt werden nicht berechnet.`;
+  hint.style.cssText = 'color:var(--muted);font-size:.875rem;margin-bottom:.85rem';
+  hint.textContent = `Du kannst 1 bis ${count} Ticket(s) bestellen. Optionale Felder leer lassen = nicht berechnet.`;
   ticketForms.appendChild(hint);
 
   for (let i = 1; i <= count; i++) {
     const div = document.createElement('div');
     div.className = 'card';
-    div.style.cssText = 'background:#f9f9f9;box-shadow:none;padding:1rem;margin-bottom:.75rem;';
+    div.style.cssText = 'background:var(--card-2);box-shadow:none;padding:1rem;margin-bottom:.75rem;border:1.5px solid var(--border)';
     div.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <strong>Ticket ${i}</strong>
-        ${i > 1 ? `<span style="font-size:.8rem;color:#999">optional</span>` : ''}
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem">
+        <strong style="font-size:.95rem">Ticket ${i}</strong>
+        ${i > 1 ? `<span style="font-size:.78rem;color:var(--muted);font-weight:500">optional</span>` : ''}
       </div>
-      <div class="form-group" style="margin-top:.5rem">
-        <label for="ticketName${i}">Name der Person${i === 1 ? ' *' : ''}</label>
-        <input id="ticketName${i}" type="text" name="ticketName"
-          placeholder="Vollständiger Name" ${i === 1 ? 'required' : ''} autocomplete="name">
-      </div>
-      <div class="form-group">
-        <label for="ticketEmail${i}">E-Mail-Adresse${i === 1 ? ' *' : ''}</label>
-        <input id="ticketEmail${i}" type="email" name="ticketEmail"
-          placeholder="name@beispiel.de" ${i === 1 ? 'required' : ''} autocomplete="email">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div class="form-group" style="margin-bottom:0">
+          <label for="ticketName${i}">Name${i === 1 ? ' *' : ''}</label>
+          <input id="ticketName${i}" type="text" name="ticketName"
+            placeholder="Vollständiger Name" ${i === 1 ? 'required' : ''} autocomplete="name">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label for="ticketEmail${i}">E-Mail${i === 1 ? ' *' : ''}</label>
+          <input id="ticketEmail${i}" type="email" name="ticketEmail"
+            placeholder="name@beispiel.de" ${i === 1 ? 'required' : ''} autocomplete="email">
+        </div>
       </div>
     `;
     ticketForms.appendChild(div);
   }
 
-  const allNameInputs = ticketForms.querySelectorAll('[name=ticketName]');
-  allNameInputs.forEach(inp => inp.addEventListener('input', updateTotal));
+  ticketForms.querySelectorAll('[name=ticketName]').forEach(inp => inp.addEventListener('input', updateTotal));
   updateTotal();
 }
 
 function updateTotal() {
   if (!config) return;
-  const forms      = ticketForms.querySelectorAll('.card');
-  let filledCount  = 0;
-  forms.forEach(f => {
+  let filledCount = 0;
+  ticketForms.querySelectorAll('.card').forEach(f => {
     const n = f.querySelector('[name=ticketName]');
     if (n && n.value.trim()) filledCount++;
   });
@@ -641,33 +869,27 @@ function updateTotal() {
   if (totalPrice) totalPrice.textContent = fmt(count * config.price);
 }
 
-// ── Bestellung absenden ──────────────────────────────────────────────────
+// ── Bestellung absenden ───────────────────────────────────────────────────
 submitBtn.addEventListener('click', async () => {
   alertBox.innerHTML = '';
   const tickets = [];
-  const forms   = ticketForms.querySelectorAll('.card');
   const emailRe = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
-  for (const form of forms) {
+  for (const form of ticketForms.querySelectorAll('.card')) {
     const nameInput  = form.querySelector('[name=ticketName]');
     const emailInput = form.querySelector('[name=ticketEmail]');
     if (!nameInput || !emailInput) continue;
     const name  = nameInput.value.trim();
     const email = emailInput.value.trim();
-
     if (!name && !email) continue;
-
     if (!name)  { showAlert(alertBox, 'Bitte den Namen für jedes begonnene Ticket ausfüllen.'); nameInput.focus(); return; }
     if (!email || !emailRe.test(email)) {
-      showAlert(alertBox, 'Bitte eine gültige E-Mail-Adresse für jedes begonnene Ticket eingeben.'); emailInput.focus(); return;
+      showAlert(alertBox, 'Bitte eine gültige E-Mail-Adresse eingeben.'); emailInput.focus(); return;
     }
     tickets.push({ ticketName: name, ticketEmail: email });
   }
 
-  if (tickets.length === 0) {
-    showAlert(alertBox, 'Bitte mindestens ein Ticket ausfüllen.');
-    return;
-  }
+  if (tickets.length === 0) { showAlert(alertBox, 'Bitte mindestens ein Ticket ausfüllen.'); return; }
 
   submitBtn.disabled  = true;
   submitBtn.innerHTML = '<span class="spinner"></span> Sende…';
@@ -681,7 +903,7 @@ submitBtn.addEventListener('click', async () => {
 
     if (res.status === 409) {
       showAlert(alertBox,
-        'Du hast bereits eine Bestellung abgesendet. ' +
+        'Du hast bereits eine Bestellung. ' +
         `<a href="/order.html?personId=${person.id}&code=${encodeURIComponent(code)}&mode=manage">Hier einsehen →</a>`,
         'warning'
       );
@@ -695,25 +917,24 @@ submitBtn.addEventListener('click', async () => {
     orderCard.style.display   = 'none';
     paymentCard.style.display = 'block';
 
-    // Frische Daten vom Server inkl. QR-Codes laden
     const freshRes  = await fetch(`/api/tickets/my-order?code=${encodeURIComponent(code)}`);
     const freshData = await freshRes.json();
     if (freshRes.ok) {
       currentOrder   = freshData.order;
       currentTickets = freshData.tickets;
-      renderManageTabs(freshData);
+      renderManage(freshData);
     } else {
-      // Fallback
       paymentCard.innerHTML = `
-        <h3>Zahlungsanweisung</h3>
-        <div>Betrag: <strong>${fmt(data.totalEur)}</strong></div>
-        <div>IBAN: <strong>${esc(config.iban)}</strong></div>
-        <div>Empfänger: <strong>${esc(config.accountName)}</strong></div>
-        <div>Referenz: <code>${esc(data.reference)}</code></div>
-        ${data.epcQr ? `<img src="${data.epcQr}" style="max-width:160px;margin-top:.75rem">` : ''}
+        <div class="pay-box">
+          <div class="pay-box-header">Zahlungsdetails</div>
+          <div class="pay-row"><span class="pay-row-label">Betrag</span><span class="pay-row-value pay-amount">${fmt(data.totalEur)}</span></div>
+          <div class="pay-row"><span class="pay-row-label">Empfänger</span><span class="pay-row-value">${esc(config.accountName)}</span></div>
+          <div class="pay-row"><span class="pay-row-label">IBAN</span><span class="pay-row-value"><code>${esc(config.iban)}</code></span></div>
+          <div class="pay-row"><span class="pay-row-label">Referenz</span><span class="pay-row-value"><code>${esc(data.reference)}</code></span></div>
+        </div>
+        ${data.epcQr ? `<div class="qr-center"><img src="${data.epcQr}" alt="Zahlung QR-Code"><span class="qr-label">Mit Banking-App scannen</span></div>` : ''}
       `;
     }
-
   } catch { showAlert(alertBox, 'Verbindungsfehler. Bitte versuche es erneut.'); }
   finally {
     submitBtn.disabled  = false;
