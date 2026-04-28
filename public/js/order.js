@@ -657,7 +657,7 @@ function renderQrPane(data) {
 // ── Tab: Angaben ändern ───────────────────────────────────────────────────
 function renderEditPane(data) {
   const pane   = document.getElementById('m-edit');
-  const canAdd = const canAdd = data.order.paid !== 1 && data.remainingSlots > 0;
+  const canAdd = data.order.paid !== 1 && data.remainingSlots > 0;
 
   pane.innerHTML = `
     <div id="manageAlertBox" style="margin-bottom:.75rem"></div>
