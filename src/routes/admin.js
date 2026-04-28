@@ -5,7 +5,7 @@
  *          Input format per person: { name, numTickets }  (email omitted – users enter it themselves)
  * GET    /api/admin/persons                 – Alle Personen auflisten
  * PATCH  /api/admin/persons/:id             – Person aktualisieren
- * DELETE /api/admin/persons/:id             – Person löschen
+ * DELETE /api/admin/persons/:id             – Person löschen (CASCADE: orders, order_tickets, payments NULLed)
  * GET    /api/admin/orders                  – Alle Bestellungen auflisten
  * GET    /api/admin/stats                   – Dashboard-Statistiken
  * POST   /api/admin/upload-pdf              – Bank-PDF hochladen und Zahlungen abgleichen
@@ -13,7 +13,7 @@
  * GET    /api/admin/export/excel            – Codes als Excel exportieren
  * POST   /api/admin/orders/:id/mark-paid   – Bestellung als bezahlt markieren
  *
- * ── DANGER ZONE ──────────────────────────────────────────────────────────────
+ * ── DANGER ZONE ─────────────────────────────────────────────────────────────
  * DELETE /api/admin/danger/person/:id       – Einzelne Person + alle Daten löschen
  * DELETE /api/admin/danger/order/:id        – Einzelne Bestellung löschen
  * DELETE /api/admin/danger/payment/:id      – Einzelne Zahlung löschen
@@ -64,9 +64,7 @@ async function requireDangerPw(req, res, next) {
   next();
 }
 
-// ── POST /api/admin/generate-codes ──────────────────────────────────────────
-// Admin only enters: name + numTickets. Email is intentionally omitted —
-// each ticket holder enters their own e-mail on the order page.
+// ── POST /api/admin/generate-codes ────────────────────────────────────────────
 router.post('/generate-codes', (req, res) => {
   const { persons } = req.body;
   if (!Array.isArray(persons) || persons.length === 0) {
@@ -103,7 +101,7 @@ router.post('/generate-codes', (req, res) => {
   }
 });
 
-// ── GET /api/admin/persons ───────────────────────────────────────────────────
+// ── GET /api/admin/persons ───────────────────────────────────────────────
 router.get('/persons', (req, res) => {
   const db = getDb();
   const persons = db.prepare(`
@@ -116,7 +114,7 @@ router.get('/persons', (req, res) => {
   res.json({ persons });
 });
 
-// ── PATCH /api/admin/persons/:id ─────────────────────────────────────────────
+// ── PATCH /api/admin/persons/:id ────────────────────────────────────────────
 router.patch('/persons/:id', (req, res) => {
   const db = getDb();
   const person = db.prepare('SELECT * FROM persons WHERE id = ?').get(req.params.id);
@@ -133,7 +131,9 @@ router.patch('/persons/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// ── DELETE /api/admin/persons/:id ───────────────────────────────────────────
+// ── DELETE /api/admin/persons/:id ────────────────────────────────────────────
+// CASCADE in schema handles orders → order_tickets automatically.
+// payments.person_id is SET NULL on delete (preserved for audit trail).
 router.delete('/persons/:id', (req, res) => {
   const db = getDb();
   const info = db.prepare('DELETE FROM persons WHERE id = ?').run(req.params.id);
@@ -141,7 +141,7 @@ router.delete('/persons/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// ── GET /api/admin/orders ────────────────────────────────────────────────────
+// ── GET /api/admin/orders ────────────────────────────────────────────────
 router.get('/orders', (req, res) => {
   const db = getDb();
   const orders = db.prepare(`
@@ -162,7 +162,7 @@ router.get('/orders', (req, res) => {
   res.json({ orders: result });
 });
 
-// ── GET /api/admin/stats ─────────────────────────────────────────────────────
+// ── GET /api/admin/stats ─────────────────────────────────────────────────
 router.get('/stats', (req, res) => {
   const db = getDb();
   const totalPersons    = db.prepare('SELECT COUNT(*) AS n FROM persons').get().n;
@@ -245,7 +245,7 @@ router.post('/upload-pdf', pdfUpload.array('pdfs', 20), async (req, res) => {
   res.json({ processed: allResults.length, newlyPaid, results: allResults });
 });
 
-// ── POST /api/admin/orders/:id/mark-paid ─────────────────────────────────────
+// ── POST /api/admin/orders/:id/mark-paid ─────────────────────────────────────────
 router.post('/orders/:id/mark-paid', (req, res) => {
   const db    = getDb();
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
@@ -274,7 +274,7 @@ router.get('/export/csv', (req, res) => {
   res.send('\uFEFF' + csv);
 });
 
-// ── GET /api/admin/export/excel ──────────────────────────────────────────────
+// ── GET /api/admin/export/excel ────────────────────────────────────────────────
 router.get('/export/excel', async (req, res) => {
   const db      = getDb();
   const persons = db.prepare('SELECT name, code, num_tickets FROM persons ORDER BY id').all();
@@ -300,37 +300,32 @@ router.get('/export/excel', async (req, res) => {
 // ⚠️  DANGER ZONE  – alle Endpunkte erfordern dangerPassword im Request-Body
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// DELETE /danger/person/:id
+// CASCADE on persons → orders → order_tickets handles all children automatically.
+// payments.person_id is SET NULL (kept for audit trail).
 router.delete('/danger/person/:id', requireDangerPw, (req, res) => {
   const db     = getDb();
   const person = db.prepare('SELECT * FROM persons WHERE id = ?').get(req.params.id);
   if (!person) return res.status(404).json({ error: 'Person nicht gefunden' });
 
-  db.transaction(() => {
-    const orderIds = db.prepare('SELECT id FROM orders WHERE person_id = ?').all(req.params.id).map(o => o.id);
-    for (const oid of orderIds) {
-      db.prepare('DELETE FROM order_tickets WHERE order_id = ?').run(oid);
-    }
-    db.prepare('DELETE FROM orders   WHERE person_id = ?').run(req.params.id);
-    db.prepare('DELETE FROM payments WHERE person_id = ?').run(req.params.id);
-    db.prepare('DELETE FROM persons  WHERE id = ?').run(req.params.id);
-  })();
+  db.prepare('DELETE FROM persons WHERE id = ?').run(req.params.id);
 
   res.json({ ok: true, deleted: 'person', id: req.params.id, name: person.name });
 });
 
+// DELETE /danger/order/:id
+// CASCADE on orders → order_tickets handles child rows automatically.
 router.delete('/danger/order/:id', requireDangerPw, (req, res) => {
   const db    = getDb();
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Bestellung nicht gefunden' });
 
-  db.transaction(() => {
-    db.prepare('DELETE FROM order_tickets WHERE order_id = ?').run(req.params.id);
-    db.prepare('DELETE FROM orders        WHERE id = ?').run(req.params.id);
-  })();
+  db.prepare('DELETE FROM orders WHERE id = ?').run(req.params.id);
 
   res.json({ ok: true, deleted: 'order', id: req.params.id });
 });
 
+// DELETE /danger/payment/:id
 router.delete('/danger/payment/:id', requireDangerPw, (req, res) => {
   const db      = getDb();
   const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(req.params.id);
@@ -348,13 +343,16 @@ router.delete('/danger/payment/:id', requireDangerPw, (req, res) => {
   res.json({ ok: true, deleted: 'payment', id: req.params.id });
 });
 
+// DELETE /danger/all – nuclear option
 router.delete('/danger/all', requireDangerPw, (req, res) => {
   const db = getDb();
 
+  // With CASCADE enabled, deleting persons cascades to orders → order_tickets.
+  // payments are handled separately to avoid FK issues with SET NULL.
   db.transaction(() => {
+    db.prepare('DELETE FROM payments').run();
     db.prepare('DELETE FROM order_tickets').run();
     db.prepare('DELETE FROM orders').run();
-    db.prepare('DELETE FROM payments').run();
     db.prepare('DELETE FROM persons').run();
   })();
 
