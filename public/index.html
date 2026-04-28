@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#e8500a">
   <title>Abiball 2026 – Ticketkauf</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
@@ -11,20 +12,19 @@
 <nav class="topbar">
   <h1>🎓 Abiball 2026</h1>
   <div class="nav-links">
-    <a href="/">Start</a>
     <a href="/admin.html">Admin</a>
   </div>
 </nav>
 
 <!-- Hero -->
 <div class="hero">
-  <h1>Willkommen zum Abiball 2026 🎉</h1>
+  <h1>🎉 Willkommen zum Abiball 2026</h1>
   <p>Gib deinen persönlichen Zugangscode ein, um deine Tickets zu bestellen.</p>
 </div>
 
 <!-- Code-Eingabe -->
 <div class="container">
-  <div class="card" style="max-width:480px;margin:0 auto;">
+  <div class="card" style="max-width:460px;margin:1.5rem auto 0;">
     <h2>🔑 Zugangscode eingeben</h2>
 
     <div id="alertBox"></div>
@@ -39,10 +39,11 @@
         maxlength="9"
         autocomplete="off"
         spellcheck="false"
+        inputmode="text"
       >
     </div>
 
-    <button class="btn btn-primary" id="verifyBtn" style="width:100%;">
+    <button class="btn btn-primary" id="verifyBtn" style="width:100%;font-size:1rem;">
       Weiter →
     </button>
   </div>
