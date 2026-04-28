@@ -83,12 +83,6 @@ function setBtn(id, disabled, html) {
   btn.disabled = disabled; btn.innerHTML = html;
 }
 
-/**
- * Badge für den Bezahlstatus einer Bestellung.
- *   paid=0 → Ausstehend  (gelb)
- *   paid=1 → Bezahlt     (grün)
- *   paid=2 → Teilzahlung (orange)
- */
 function paidBadge(order) {
   if (order.paid === 1) {
     return `<span class="badge badge-success">✓ Bezahlt</span>` +
@@ -103,11 +97,8 @@ function paidBadge(order) {
   return '<span class="badge badge-warning">Ausstehend</span>';
 }
 
-/** Badge für ein einzelnes Split-Ticket */
 function splitTicketBadge(ticket) {
-  if (ticket.ticket_paid) {
-    return `<span class="badge badge-success" style="font-size:.7rem">✓ Bezahlt</span>`;
-  }
+  if (ticket.ticket_paid) return `<span class="badge badge-success" style="font-size:.7rem">✓ Bezahlt</span>`;
   return `<span class="badge badge-warning" style="font-size:.7rem">ausstehend</span>`;
 }
 
@@ -231,63 +222,100 @@ function renderOrders(orders) {
 
   const tbody = document.getElementById('ordersTbody');
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted)">Keine Bestellungen vorhanden.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted)">Keine Bestellungen vorhanden.</td></tr>';
     return;
   }
+
+  // Each order = 2 rows: summary (always visible) + detail (collapsed)
   tbody.innerHTML = filtered.map(o => {
-    const ticketRows = (o.tickets || []).map((t, i) => {
-      const splitBadgeHtml = o.split_payment
-        ? `<span style="margin-left:.3rem">${splitTicketBadge(t)}</span>`
-        : '';
-      const splitRefHtml = o.split_payment && t.split_ref
-        ? `<code style="font-size:.7rem;color:var(--muted);display:block">${esc(t.split_ref)}</code>`
-        : '';
-      const ticketMarkPaidBtn = (o.split_payment && !t.ticket_paid)
-        ? `<button class="btn btn-success" style="padding:.2rem .45rem;font-size:.72rem;white-space:nowrap" onclick="adminMarkTicketPaid(${o.id},${t.id},this)" title="Dieses Ticket als bezahlt markieren">✓ bezahlt</button>`
-        : '';
+    const ticketCount = (o.tickets || []).length;
+    const paidCount   = (o.tickets || []).filter(t => t.ticket_paid).length;
+    const splitIcon   = o.split_payment ? ' 💳' : '';
 
-      return `<div style="display:flex;align-items:center;gap:.4rem;padding:.25rem 0;border-bottom:1px solid #eee;flex-wrap:wrap">
-        <span style="font-size:.8rem;color:#777">T${i+1}</span>
-        <span style="flex:1;font-size:.85rem;min-width:120px">
-          ${esc(t.ticket_name)} &lt;${esc(t.ticket_email || '–')}&gt;
-          ${splitRefHtml}
-        </span>
-        ${splitBadgeHtml}
-        ${ticketMarkPaidBtn}
-        ${o.paid !== 1 && !t.ticket_paid
-          ? `<button class="btn btn-danger" style="padding:.2rem .5rem;font-size:.75rem" onclick="adminDeleteTicket(${o.id},${t.id},this)">🗑</button>`
-          : (o.paid === 1 ? `<span class="badge badge-muted" style="font-size:.7rem">bezahlt</span>` : '')
-        }
-      </div>`;
-    }).join('');
-
-    const splitIcon = o.split_payment
-      ? `<span title="Separat-Zahlung" style="margin-left:.4rem;font-size:.8rem">💳</span>`
-      : '';
-
+    // Whole-order mark-paid button
     let markPaidBtn = '';
     if (o.paid !== 1) {
       const remaining = o.paid === 2
         ? fmt((parseFloat(o.total_eur) || 0) - (parseFloat(o.paid_amount) || 0))
         : fmt(o.total_eur);
       const label = o.paid === 2
-        ? `✓ Restbetrag (${remaining}) als bezahlt`
-        : `✓ Als bezahlt markieren`;
-      markPaidBtn = `<button class="btn btn-success" style="padding:.3rem .7rem;font-size:.8rem;white-space:nowrap" onclick="markPaid(${o.id},this)">${label}</button>`;
+        ? `✓ Restbetrag (${remaining}) bezahlt`
+        : `✓ Alles bezahlt`;
+      markPaidBtn = `<button class="btn btn-success" style="padding:.25rem .6rem;font-size:.78rem;white-space:nowrap" onclick="event.stopPropagation();markPaid(${o.id},this)">${label}</button>`;
     }
 
-    return `<tr>
-      <td><span class="badge badge-muted" title="Bestellungs-ID">#${o.id}</span></td>
-      <td><strong>${esc(o.person_name)}</strong></td>
-      <td><code>${esc(o.person_code)}</code></td>
-      <td style="min-width:220px">${ticketRows || '–'}</td>
-      <td>${fmt(o.total_eur)}${splitIcon}</td>
-      <td>${paidBadge(o)}</td>
-      <td style="font-size:.82rem;color:var(--muted)">${esc(o.created_at?.slice(0,16)||'')}</td>
-      <td>${markPaidBtn}</td>
-    </tr>`;
+    // Ticket detail rows (inside collapsible)
+    const ticketRows = (o.tickets || []).map((t, i) => {
+      const splitRef = o.split_payment && t.split_ref
+        ? `<code style="font-size:.7rem;color:var(--muted);display:block">${esc(t.split_ref)}</code>`
+        : '';
+      const statusBadge = o.split_payment ? splitTicketBadge(t) : '';
+
+      // Per-ticket mark-paid: show for split orders (unpaid) OR for any order where ticket is unpaid
+      const canMarkPaid = !t.ticket_paid && o.paid !== 1;
+      const ticketPaidBtn = canMarkPaid
+        ? `<button class="btn btn-success" style="padding:.18rem .4rem;font-size:.72rem;white-space:nowrap" onclick="adminMarkTicketPaid(${o.id},${t.id},this)" title="Ticket als bezahlt markieren">✓ bezahlt</button>`
+        : '';
+      const deleteBtn = canMarkPaid
+        ? `<button class="btn btn-danger" style="padding:.18rem .4rem;font-size:.72rem" onclick="adminDeleteTicket(${o.id},${t.id},this)">🗑</button>`
+        : (t.ticket_paid ? `<span class="badge badge-success" style="font-size:.7rem">✓</span>` : '');
+
+      return `
+        <div style="display:flex;align-items:center;gap:.4rem;padding:.3rem .5rem;border-bottom:1px solid #f0f0f0;flex-wrap:wrap;background:#fafafa">
+          <span style="font-size:.78rem;color:#999;min-width:1.8rem">T${i+1}</span>
+          <span style="flex:1;font-size:.83rem;min-width:120px">
+            <strong>${esc(t.ticket_name)}</strong>
+            <span style="color:var(--muted)"> &lt;${esc(t.ticket_email || '–')}&gt;</span>
+            ${splitRef}
+          </span>
+          ${statusBadge}
+          ${ticketPaidBtn}
+          ${deleteBtn}
+        </div>`;
+    }).join('');
+
+    const detailId = `order-detail-${o.id}`;
+
+    // Summary row (clickable)
+    const summaryRow = `
+      <tr class="order-summary-row" onclick="toggleOrderDetail('${detailId}', this)"
+          style="cursor:pointer;user-select:none" title="Klicken zum Aufklappen">
+        <td style="width:1.8rem">
+          <span class="order-chevron" style="display:inline-block;transition:transform .18s">▶</span>
+        </td>
+        <td><span class="badge badge-muted">#${o.id}</span></td>
+        <td><strong>${esc(o.person_name)}</strong><br><code style="font-size:.75rem">${esc(o.person_code)}</code></td>
+        <td style="font-size:.83rem">${ticketCount} Ticket(s)${o.split_payment ? ' <span title="Splitbuchung" style="font-size:.8rem">💳</span>' : ''}
+          ${o.split_payment ? `<br><span style="font-size:.72rem;color:var(--muted)">${paidCount}/${ticketCount} bezahlt</span>` : ''}
+        </td>
+        <td>${fmt(o.total_eur)}${splitIcon}</td>
+        <td>${paidBadge(o)}</td>
+        <td style="font-size:.78rem;color:var(--muted)">${esc(o.created_at?.slice(0,16)||'')}</td>
+        <td onclick="event.stopPropagation()">${markPaidBtn}</td>
+      </tr>`;
+
+    // Detail row (hidden by default)
+    const detailRow = `
+      <tr id="${detailId}" style="display:none">
+        <td colspan="8" style="padding:0;border-top:none">
+          <div style="border-left:3px solid #e0e0e0;margin-left:.5rem">
+            ${ticketRows || '<div style="padding:.5rem 1rem;color:var(--muted);font-size:.85rem">Keine Tickets.</div>'}
+          </div>
+        </td>
+      </tr>`;
+
+    return summaryRow + detailRow;
   }).join('');
 }
+
+window.toggleOrderDetail = function(detailId, summaryRow) {
+  const detail  = document.getElementById(detailId);
+  const chevron = summaryRow.querySelector('.order-chevron');
+  if (!detail) return;
+  const isOpen = detail.style.display !== 'none';
+  detail.style.display = isOpen ? 'none' : 'table-row';
+  if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(90deg)';
+};
 
 document.getElementById('ordersFilter')?.addEventListener('change', () => renderOrders(allOrders));
 
@@ -303,21 +331,21 @@ window.markPaid = async function(orderId, btn) {
   } catch { showAlert('ordersAlert', 'Verbindungsfehler.'); btn.disabled = false; btn.textContent = '✓ Als bezahlt markieren'; }
 };
 
-// ── Mark single ticket as paid (split orders) ─────────────────────────────
+// ── Mark single ticket as paid ──────────────────────────────────────────────
 window.adminMarkTicketPaid = async function(orderId, ticketId, btn) {
-  if (!confirm('Dieses einzelne Ticket als bezahlt markieren? Das Ticket-QR wird per E-Mail verschickt.')) return;
+  if (!confirm('Dieses Ticket als bezahlt markieren?')) return;
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
   try {
     const res  = await fetch(`/api/admin/orders/${orderId}/ticket/${ticketId}/mark-paid`, { method: 'POST' });
     const data = await res.json();
     if (res.ok) {
       const emailInfo = data.email?.ok
-        ? ` E-Mail gesendet an ${esc(data.email.sentTo)}.`
-        : (data.email?.error ? ` ⚠️ E-Mail fehlgeschlagen: ${esc(data.email.error)}` : '');
-      showAlert('ordersAlert', `✅ Ticket als bezahlt markiert.${emailInfo}`, 'success');
+        ? ` E-Mail an ${esc(data.email.sentTo)}.`
+        : (data.email?.error ? ` ⚠️ E-Mail fehlgeschlagen.` : '');
+      showAlert('ordersAlert', `✅ Ticket bezahlt markiert.${emailInfo}`, 'success');
       loadOrders(); loadStats(); loadDashUnpaid();
     } else {
-      showAlert('ordersAlert', data.error || 'Fehler beim Markieren.');
+      showAlert('ordersAlert', data.error || 'Fehler.');
       btn.disabled = false; btn.textContent = '✓ bezahlt';
     }
   } catch {
@@ -333,16 +361,16 @@ window.adminDeleteTicket = async function(orderId, ticketId, btn) {
     const res  = await fetch(`/api/admin/orders/${orderId}/ticket/${ticketId}`, { method: 'DELETE' });
     const data = await res.json();
     if (res.ok) {
-      showAlert('ordersAlert', `✅ Ticket gelöscht. Neuer Gesamtbetrag: ${fmt(data.newTotalEur)}`, 'success');
+      showAlert('ordersAlert', `✅ Ticket gelöscht. Neuer Betrag: ${fmt(data.newTotalEur)}`, 'success');
       loadOrders(); loadStats();
     } else if (data.error === 'paid_order') {
-      showAlert('ordersAlert', '⚠️ Diese Bestellung wurde bereits bezahlt. Bitte die <strong>Danger Zone</strong> verwenden.', 'warning');
+      showAlert('ordersAlert', '⚠️ Bestellung bereits bezahlt → Danger Zone verwenden.', 'warning');
       btn.disabled = false; btn.innerHTML = '🗑';
     } else if (data.error === 'last_ticket') {
       showAlert('ordersAlert', '⚠️ Mindestens ein Ticket muss verbleiben.', 'warning');
       btn.disabled = false; btn.innerHTML = '🗑';
     } else {
-      showAlert('ordersAlert', data.message || data.error || 'Fehler beim Löschen.');
+      showAlert('ordersAlert', data.message || data.error || 'Fehler.');
       btn.disabled = false; btn.innerHTML = '🗑';
     }
   } catch {
@@ -384,7 +412,7 @@ window.sendTickets = async function(paymentId, btn) {
     const res  = await fetch(`/api/payments/${paymentId}/send`, { method: 'POST' });
     const data = await res.json();
     if (res.ok) { showAlert('paymentsAlert', `✅ Tickets an ${(data.sentTo||[]).join(', ')} gesendet.`, 'success'); loadPayments(); }
-    else { showAlert('paymentsAlert', data.error || 'Fehler beim Senden.'); btn.disabled = false; btn.textContent = '✉ Tickets senden'; }
+    else { showAlert('paymentsAlert', data.error || 'Fehler.'); btn.disabled = false; btn.textContent = '✉ Tickets senden'; }
   } catch { showAlert('paymentsAlert', 'Verbindungsfehler.'); btn.disabled = false; btn.textContent = '✉ Tickets senden'; }
 };
 
