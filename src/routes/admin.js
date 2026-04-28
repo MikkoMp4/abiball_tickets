@@ -56,28 +56,23 @@ async function sendTicketsForOrder(db, person, order) {
   return sentTo;
 }
 
-// ── CSV header detection ────────────────────────────────────────────────────────────────────────────
-// Banks like DKB prepend several metadata lines before the actual header row.
-// We scan all lines and pick the first one that contains a known header keyword.
-function findCsvHeaderLine(lines, sep) {
+function findCsvHeaderLine(lines) {
   const HEADER_KEYWORDS = ['buchungsdatum', 'buchungstag', 'verwendungszweck', 'betrag', 'date', 'amount'];
   for (let i = 0; i < lines.length; i++) {
     const lower = lines[i].toLowerCase();
     if (HEADER_KEYWORDS.some(k => lower.includes(k))) return i;
   }
-  return 0; // fallback: assume first line is header
+  return 0;
 }
 
-// Normalize a column header string for fuzzy matching:
-// lower-case, strip quotes, remove special chars like (*r) from DKB gender suffixes
 function normHeader(h) {
   return h
     .replace(/^"|"$/g, '')
     .trim()
     .toLowerCase()
-    .replace(/\(.*?\)/g, '')   // remove anything in parentheses: "Betrag (€)" -> "betrag "
-    .replace(/\*/g, '')        // remove asterisks: "Zahlungspflichtige*r" -> "zahlungspflichtige r"
-    .replace(/\s+/g, ' ')      // collapse whitespace
+    .replace(/\(.*?\)/g, '')
+    .replace(/\*/g, '')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -204,7 +199,6 @@ router.post('/upload-pdf', pdfUpload.array('pdfs', 20), async (req, res) => {
   res.json({ processed: allResults.length, newlyPaid: newlyFullyPaid.length, emailsSent: emailResults, results: allResults });
 });
 
-// ── CSV / Excel Kontoauszug hochladen ─────────────────────────────────────────
 router.post('/upload-statement', statementUpload.single('statement'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen' });
 
@@ -214,38 +208,32 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
 
   try {
     if (ext === '.csv') {
-      const text  = req.file.buffer.toString('utf-8').replace(/^\uFEFF/, ''); // strip BOM
+      const text  = req.file.buffer.toString('utf-8').replace(/^\uFEFF/, '');
       const lines = text.split(/\r?\n/).filter(l => l.trim());
       if (lines.length < 2) return res.status(400).json({ error: 'CSV ist leer oder hat keine Datenzeilen' });
 
-      const sep        = lines[0].includes(';') ? ';' : ',';
-      const headerLine = findCsvHeaderLine(lines, sep);
+      const sep        = lines.find(l => l.includes(';')) ? ';' : ',';
+      const headerLine = findCsvHeaderLine(lines);
       const header     = lines[headerLine].split(sep).map(normHeader);
       const colIdx     = makeColIdx(header);
 
-      // Column candidates – normalized (no parens, no asterisks, lower-case)
-      // DKB:  "Buchungsdatum" | "Zahlungspflichtige r" (after norm) | "Verwendungszweck" | "betrag "
       const dateCol = colIdx(['buchungsdatum', 'buchungstag', 'valuta', 'date', 'datum']);
       const nameCol = colIdx(['zahlungspflichtige', 'auftraggeber', 'beguenstigter', 'absender', 'sender', 'name']);
       const refCol  = colIdx(['verwendungszweck', 'reference', 'referenz', 'betreff', 'description', 'buchungstext']);
-      const amtCol  = colIdx(['betrag', 'amount', 'umsatz', 'wert']); // "betrag " (after stripping "(€)") matches 'betrag'
+      const amtCol  = colIdx(['betrag', 'amount', 'umsatz', 'wert']);
 
       if (refCol === -1 || amtCol === -1) {
         return res.status(400).json({
-          error: `CSV-Format nicht erkannt: Spalten "Verwendungszweck" und "Betrag" werden benötigt.` +
-                 ` Erkannte Spalten: ${header.join(', ')}`,
+          error: `CSV-Format nicht erkannt: Spalten "Verwendungszweck" und "Betrag" werden benötigt. Erkannte Spalten: ${header.join(', ')}`,
         });
       }
 
       for (let i = headerLine + 1; i < lines.length; i++) {
-        // Split respecting quoted fields
-        const cols  = lines[i].match(/(?:"[^"]*"|[^;,]*)(?=[;,]|$)/g) || lines[i].split(sep);
-        const clean = (idx) => (idx !== -1 && cols[idx]) ? cols[idx].replace(/^"|"$/g, '').trim() : '';
-
-        // DKB amounts: "33" (plain integer) or "1.234,56" (German locale with thousands dot)
-        const rawAmt = clean(amtCol).replace(/\./g, '').replace(',', '.');
+        const cols = lines[i].split(sep);
+        const clean = (idx) => (idx !== -1 && cols[idx] !== undefined) ? cols[idx].replace(/^"|"$/g, '').trim() : '';
+        const rawAmt = clean(amtCol).replace(/€/g, '').replace(/\./g, '').replace(',', '.').replace(/\s+/g, '');
         const amount = parseFloat(rawAmt);
-        if (isNaN(amount)) continue; // skip metadata / empty / totals rows
+        if (isNaN(amount)) continue;
 
         rows.push({
           booking_date: clean(dateCol) || new Date().toISOString().slice(0, 10),
@@ -255,13 +243,11 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
         });
       }
     } else {
-      // Excel (.xlsx / .xls) via ExcelJS
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(req.file.buffer);
       const ws = workbook.worksheets[0];
       if (!ws) return res.status(400).json({ error: 'Excel-Datei enthält kein Worksheet' });
 
-      // Scan rows for the header (same strategy as CSV)
       let headerRowNum = 1;
       ws.eachRow((row, rowNum) => {
         if (headerRowNum !== 1) return;
@@ -287,7 +273,7 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
       ws.eachRow((row, rowNum) => {
         if (rowNum <= headerRowNum) return;
         const get = (idx) => idx !== -1 ? String(row.getCell(idx).value || '').trim() : '';
-        const rawAmt = get(amtCol).replace(/\./g, '').replace(',', '.');
+        const rawAmt = get(amtCol).replace(/€/g, '').replace(/\./g, '').replace(',', '.').replace(/\s+/g, '');
         const amount = parseFloat(rawAmt);
         if (isNaN(amount)) return;
         rows.push({
@@ -304,7 +290,6 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
 
   if (!rows.length) return res.status(400).json({ error: 'Keine verarbeitbaren Zeilen in der Datei gefunden' });
 
-  // Match rows against orders and insert payments
   const allResults = [];
   const affectedPersonIds = new Set();
 
@@ -325,7 +310,6 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
     allResults.push({ reference: ref, amount: row.amount_eur, sender: row.sender_name, personName: person?.name || null, matched: !!person });
   }
 
-  // Recalculate payment status and send ticket emails for newly paid orders
   const newlyFullyPaid = [];
   for (const personId of affectedPersonIds) {
     const { nowFullyPaid, order } = recalcPaymentStatus(db, personId);
@@ -347,14 +331,12 @@ router.post('/upload-statement', statementUpload.single('statement'), async (req
   });
 });
 
-// ── Gesamte Bestellung als bezahlt markieren ─────────────────────────────────
 router.post('/orders/:id/mark-paid', async (req, res) => {
   const db    = getDb();
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Bestellung nicht gefunden' });
   if (order.paid === 1) return res.json({ ok: true, alreadyPaid: true });
   db.prepare("UPDATE orders SET paid = 1, paid_amount = total_eur, paid_at = COALESCE(paid_at, datetime('now')) WHERE id = ?").run(req.params.id);
-  // Alle Tickets der Bestellung als bezahlt markieren
   db.prepare('UPDATE order_tickets SET ticket_paid = 1 WHERE order_id = ?').run(req.params.id);
   const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   const person       = db.prepare('SELECT * FROM persons WHERE id = ?').get(updatedOrder.person_id);
@@ -366,7 +348,6 @@ router.post('/orders/:id/mark-paid', async (req, res) => {
   res.json({ ok: true, email: emailResult });
 });
 
-// ── Einzelnes Ticket als bezahlt markieren ───────────────────────────────────
 router.post('/orders/:orderId/ticket/:ticketId/mark-paid', async (req, res) => {
   const db     = getDb();
   const s      = getSettings();
@@ -382,10 +363,8 @@ router.post('/orders/:orderId/ticket/:ticketId/mark-paid', async (req, res) => {
 
   db.transaction(() => {
     db.prepare("UPDATE order_tickets SET ticket_paid = 1 WHERE id = ?").run(req.params.ticketId);
-    // paid_amount erhöhen
     db.prepare("UPDATE orders SET paid_amount = COALESCE(paid_amount, 0) + ?, paid_at = COALESCE(paid_at, datetime('now')) WHERE id = ?")
       .run(ticketPrice, req.params.orderId);
-    // Prüfen ob alle Tickets bezahlt sind → paid=1, sonst paid=2
     const total   = db.prepare('SELECT COUNT(*) AS n FROM order_tickets WHERE order_id = ?').get(req.params.orderId).n;
     const paidCnt = db.prepare('SELECT COUNT(*) AS n FROM order_tickets WHERE order_id = ? AND ticket_paid = 1').get(req.params.orderId).n;
     const newPaidStatus = paidCnt >= total ? 1 : 2;
@@ -396,7 +375,6 @@ router.post('/orders/:orderId/ticket/:ticketId/mark-paid', async (req, res) => {
   const person        = db.prepare('SELECT * FROM persons WHERE id = ?').get(order.person_id);
   let emailResult     = null;
 
-  // E-Mail nur für dieses eine Ticket senden
   if (person) {
     try {
       const { generateQrBufferForTicket } = require('../utils/qrGenerator');
@@ -406,8 +384,7 @@ router.post('/orders/:orderId/ticket/:ticketId/mark-paid', async (req, res) => {
       await sendSingleTicketEmail({ to: updatedTicket.ticket_email, personName: updatedTicket.ticket_name, qrBuffer, updated: false });
       emailResult = { ok: true, sentTo: updatedTicket.ticket_email };
     } catch (err) {
-      emailResult = { ok: false, error: err.message };
-    }
+      emailResult = { ok: false, error: err.message }; }
   }
 
   res.json({ ok: true, newPaidStatus: updatedOrder.paid, email: emailResult });
