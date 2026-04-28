@@ -2,22 +2,17 @@
 
 // ── Auth ──────────────────────────────────────────────────────────────────
 (async function initAuth() {
-  const overlay  = document.getElementById('loginOverlay');
-  const content  = document.getElementById('adminContent');
-  const input    = document.getElementById('loginInput');
-  const btn      = document.getElementById('loginBtn');
-  const errEl    = document.getElementById('loginError');
+  const overlay = document.getElementById('loginOverlay');
+  const content = document.getElementById('adminContent');
+  const input   = document.getElementById('loginInput');
+  const btn     = document.getElementById('loginBtn');
+  const errEl   = document.getElementById('loginError');
 
-  // 1. Check if device already has a valid session cookie
   try {
     const res = await fetch('/api/auth/check');
-    if (res.ok) {
-      showAdminContent();
-      return;
-    }
+    if (res.ok) { showAdminContent(); return; }
   } catch { /* show login */ }
 
-  // 2. Show login form
   overlay.style.display = 'flex';
 
   async function attemptLogin() {
@@ -27,10 +22,10 @@
     btn.textContent = '…';
     errEl.textContent = '';
     try {
-      const res  = await fetch('/api/auth/login', {
-        method:  'POST',
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ password: pw }),
+        body: JSON.stringify({ password: pw }),
       });
       if (res.ok) {
         showAdminContent();
@@ -52,7 +47,7 @@
 
   function showAdminContent() {
     overlay.style.display = 'none';
-    content.style.display  = 'block';
+    content.style.display = 'block';
     initDashboard();
   }
 })();
@@ -63,7 +58,7 @@ document.getElementById('logoutBtn')?.addEventListener('click', async () => {
   location.reload();
 });
 
-// ── Main init (called after auth) ──────────────────────────────────────────
+// ── Main init ─────────────────────────────────────────────────────────────
 function initDashboard() {
   setupTabs();
   loadStats();
@@ -76,6 +71,7 @@ function initDashboard() {
   setupCsvUpload();
   setupPdfUpload();
   setupGenerateCodes();
+  setupDangerZone();
 }
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
@@ -90,7 +86,7 @@ function setupTabs() {
   });
 }
 
-// ── Hilfsfunktionen ─────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────
 function showAlert(id, msg, type = 'danger') {
   const el = document.getElementById(id);
   if (el) el.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
@@ -118,11 +114,11 @@ function setBtn(id, disabled, html) {
   btn.innerHTML = html;
 }
 
-// ── Dashboard laden ───────────────────────────────────────────────────────────
+// ── Stats ─────────────────────────────────────────────────────────────────
 async function loadStats() {
   try {
     const res  = await fetch('/api/admin/stats');
-    if (res.status === 401) return; // not authed yet
+    if (res.status === 401) return;
     const data = await res.json();
     document.getElementById('st-persons').textContent     = data.totalPersons;
     document.getElementById('st-orders').textContent      = data.totalOrders;
@@ -132,9 +128,7 @@ async function loadStats() {
     document.getElementById('st-revenue').textContent     = fmt(data.totalRevenue);
     document.getElementById('st-pending-rev').textContent = fmt(data.pendingRevenue);
     document.getElementById('st-payments').textContent    = `${data.matchedPayments} / ${data.totalPayments}`;
-  } catch {
-    // silent
-  }
+  } catch { /* silent */ }
 }
 
 async function loadDashUnpaid() {
@@ -154,7 +148,7 @@ async function loadDashUnpaid() {
         <td><code>${esc(o.person_code)}</code></td>
         <td>${o.ticket_count}</td>
         <td>${fmt(o.total_eur)}</td>
-        <td style="font-size:.82rem;color:var(--muted)">${esc(o.created_at?.slice(0,16) || '')}</td>
+        <td style="font-size:.82rem;color:var(--muted)">${esc(o.created_at?.slice(0,16)||'')}</td>
       </tr>
     `).join('');
   } catch {
@@ -162,7 +156,7 @@ async function loadDashUnpaid() {
   }
 }
 
-// ── Personen laden ─────────────────────────────────────────────────────────────
+// ── Persons ─────────────────────────────────────────────────────────────
 async function loadPersons() {
   try {
     const res  = await fetch('/api/admin/persons');
@@ -183,16 +177,13 @@ function renderPersons(persons) {
   tbody.innerHTML = persons.map(p => `
     <tr>
       <td><strong>${esc(p.name)}</strong></td>
-      <td>${esc(p.email || '–')}</td>
+      <td>${esc(p.email||'–')}</td>
       <td><code>${esc(p.code)}</code></td>
       <td>${p.num_tickets}</td>
-      <td>${p.has_order ? '<span class="badge badge-warning">Ja</span>' : '<span class="badge badge-muted">Nein</span>'}</td>
-      <td>${p.is_paid  ? '<span class="badge badge-success">Bezahlt</span>' : '<span class="badge badge-muted">Offen</span>'}</td>
-      <td style="font-size:.82rem;color:var(--muted)">${esc(p.created_at?.slice(0,16) || '')}</td>
-      <td>
-        <button class="btn btn-danger" style="padding:.3rem .7rem;font-size:.8rem"
-          onclick="deletePerson(${p.id})">&#x1F5D1;</button>
-      </td>
+      <td>${p.has_order?'<span class="badge badge-warning">Ja</span>':'<span class="badge badge-muted">Nein</span>'}</td>
+      <td>${p.is_paid ?'<span class="badge badge-success">Bezahlt</span>':'<span class="badge badge-muted">Offen</span>'}</td>
+      <td style="font-size:.82rem;color:var(--muted)">${esc(p.created_at?.slice(0,16)||'')}</td>
+      <td><button class="btn btn-danger" style="padding:.3rem .7rem;font-size:.8rem" onclick="deletePerson(${p.id})">&#x1F5D1;</button></td>
     </tr>
   `).join('');
 }
@@ -204,47 +195,34 @@ window.deletePerson = async function(id) {
   else showAlert('personsAlert', 'Fehler beim Löschen.');
 };
 
-// ── Codes generieren ─────────────────────────────────────────────────────────
+// ── Generate codes ─────────────────────────────────────────────────────────
 function setupGenerateCodes() {
   document.getElementById('generateBtn')?.addEventListener('click', async () => {
     clearAlert('genAlert');
     const raw = document.getElementById('personsBulk').value.trim();
-    if (!raw) { showAlert('genAlert', 'Bitte Personen eingeben.', 'warning'); return; }
+    if (!raw) { showAlert('genAlert','Bitte Personen eingeben.','warning'); return; }
 
-    const lines   = raw.split('\n').map(l => l.trim()).filter(Boolean);
-    const persons = lines.map(line => {
-      const parts = line.split(';').map(s => s.trim());
-      return {
-        name:       parts[0] || 'Unbekannt',
-        email:      parts[1] || '',
-        numTickets: parseInt(parts[2], 10) || 1,
-      };
+    const persons = raw.split('\n').map(l=>l.trim()).filter(Boolean).map(line => {
+      const parts = line.split(';').map(s=>s.trim());
+      return { name: parts[0]||'Unbekannt', email: parts[1]||'', numTickets: parseInt(parts[2],10)||1 };
     });
 
     setBtn('generateBtn', true, '<span class="spinner"></span> Generiere…');
-
     try {
       const res  = await fetch('/api/admin/generate-codes', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ persons }),
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({persons}),
       });
       const data = await res.json();
-      if (!res.ok) { showAlert('genAlert', data.error || 'Fehler.'); return; }
-
-      showAlert('genAlert', `✅ ${data.created.length} Code(s) erfolgreich generiert.`, 'success');
+      if (!res.ok) { showAlert('genAlert', data.error||'Fehler.'); return; }
+      showAlert('genAlert', `✅ ${data.created.length} Code(s) generiert.`, 'success');
       document.getElementById('personsBulk').value = '';
-      loadPersons();
-      loadStats();
-    } catch {
-      showAlert('genAlert', 'Verbindungsfehler.');
-    } finally {
-      setBtn('generateBtn', false, 'Codes generieren');
-    }
+      loadPersons(); loadStats();
+    } catch { showAlert('genAlert','Verbindungsfehler.'); }
+    finally   { setBtn('generateBtn', false, 'Codes generieren'); }
   });
 }
 
-// ── Bestellungen laden ──────────────────────────────────────────────────────────
+// ── Orders ─────────────────────────────────────────────────────────────────
 let allOrders = [];
 
 async function loadOrders() {
@@ -254,284 +232,276 @@ async function loadOrders() {
     const data = await res.json();
     allOrders  = data.orders || [];
     renderOrders(allOrders);
-  } catch {
-    showAlert('ordersAlert', 'Fehler beim Laden der Bestellungen.');
-  }
+  } catch { showAlert('ordersAlert','Fehler beim Laden der Bestellungen.'); }
 }
 
 function renderOrders(orders) {
   const filter = document.getElementById('ordersFilter')?.value || 'all';
   let filtered = orders;
-  if (filter === 'paid')   filtered = orders.filter(o => o.paid);
-  if (filter === 'unpaid') filtered = orders.filter(o => !o.paid);
-  if (filter === 'sent')   filtered = orders.filter(o => o.paid);
+  if (filter==='paid')   filtered=orders.filter(o=>o.paid);
+  if (filter==='unpaid') filtered=orders.filter(o=>!o.paid);
+  if (filter==='sent')   filtered=orders.filter(o=>o.paid);
 
   const tbody = document.getElementById('ordersTbody');
-  if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted)">Keine Bestellungen vorhanden.</td></tr>';
+  if (!filtered.length) {
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--muted)">Keine Bestellungen vorhanden.</td></tr>';
     return;
   }
-
   tbody.innerHTML = filtered.map(o => {
-    const ticketNames     = (o.tickets || []).map(t => esc(t.ticket_name)).join(', ') || '–';
-    const ticketNamesAttr = ticketNames.replace(/"/g, '&quot;');
-    return `
-      <tr>
-        <td><strong>${esc(o.person_name)}</strong></td>
-        <td style="font-size:.82rem">${esc(o.person_email || '–')}</td>
-        <td><code>${esc(o.person_code)}</code></td>
-        <td title="${ticketNamesAttr}" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.ticket_count} (${ticketNames})</td>
-        <td>${fmt(o.total_eur)}</td>
-        <td>${o.paid
-          ? `<span class="badge badge-success">✓ Bezahlt</span><br><span style="font-size:.75rem;color:var(--muted)">${esc(o.paid_at?.slice(0,16) || '')}</span>`
-          : '<span class="badge badge-warning">Ausstehend</span>'}</td>
-        <td style="font-size:.82rem;color:var(--muted)">${esc(o.created_at?.slice(0,16) || '')}</td>
-        <td>
-          ${!o.paid ? `<button class="btn btn-success" style="padding:.3rem .7rem;font-size:.8rem"
-            onclick="markPaid(${o.id}, this)">✓ Als bezahlt markieren</button>` : ''}
-        </td>
-      </tr>
-    `;
+    const names = (o.tickets||[]).map(t=>esc(t.ticket_name)).join(', ')||'–';
+    return `<tr>
+      <td><strong>${esc(o.person_name)}</strong></td>
+      <td style="font-size:.82rem">${esc(o.person_email||'–')}</td>
+      <td><code>${esc(o.person_code)}</code></td>
+      <td title="${names.replace(/"/g,'&quot;')}" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.ticket_count} (${names})</td>
+      <td>${fmt(o.total_eur)}</td>
+      <td>${o.paid
+        ?`<span class="badge badge-success">✓ Bezahlt</span><br><span style="font-size:.75rem;color:var(--muted)">${esc(o.paid_at?.slice(0,16)||'')}</span>`
+        :'<span class="badge badge-warning">Ausstehend</span>'}</td>
+      <td style="font-size:.82rem;color:var(--muted)">${esc(o.created_at?.slice(0,16)||'')}</td>
+      <td>${!o.paid?`<button class="btn btn-success" style="padding:.3rem .7rem;font-size:.8rem" onclick="markPaid(${o.id},this)">✓ Als bezahlt</button>`:''}</td>
+    </tr>`;
   }).join('');
 }
 
-document.getElementById('ordersFilter')?.addEventListener('change', () => renderOrders(allOrders));
+document.getElementById('ordersFilter')?.addEventListener('change',()=>renderOrders(allOrders));
 
 window.markPaid = async function(orderId, btn) {
   if (!confirm('Bestellung manuell als bezahlt markieren?')) return;
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>';
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>';
   try {
-    const res  = await fetch(`/api/admin/orders/${orderId}/mark-paid`, { method: 'POST' });
-    const data = await res.json();
-    if (res.ok) {
-      loadOrders();
-      loadStats();
-      loadDashUnpaid();
-    } else {
-      showAlert('ordersAlert', data.error || 'Fehler.');
-      btn.disabled = false;
-      btn.textContent = '✓ Als bezahlt markieren';
-    }
-  } catch {
-    showAlert('ordersAlert', 'Verbindungsfehler.');
-    btn.disabled = false;
-    btn.textContent = '✓ Als bezahlt markieren';
-  }
+    const res=await fetch(`/api/admin/orders/${orderId}/mark-paid`,{method:'POST'});
+    const data=await res.json();
+    if (res.ok) { loadOrders(); loadStats(); loadDashUnpaid(); }
+    else { showAlert('ordersAlert',data.error||'Fehler.'); btn.disabled=false; btn.textContent='✓ Als bezahlt markieren'; }
+  } catch { showAlert('ordersAlert','Verbindungsfehler.'); btn.disabled=false; btn.textContent='✓ Als bezahlt markieren'; }
 };
 
-// ── Zahlungen laden ────────────────────────────────────────────────────────────
+// ── Payments ─────────────────────────────────────────────────────────────
 async function loadPayments() {
   try {
     const res  = await fetch('/api/payments');
     const data = await res.json();
-    renderPayments(data.payments || []);
-  } catch {
-    showAlert('paymentsAlert', 'Fehler beim Laden der Zahlungen.');
-  }
+    renderPayments(data.payments||[]);
+  } catch { showAlert('paymentsAlert','Fehler beim Laden der Zahlungen.'); }
 }
 
 function renderPayments(payments) {
   const tbody = document.getElementById('paymentsTbody');
-  if (payments.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">Keine Zahlungen vorhanden.</td></tr>';
+  if (!payments.length) {
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--muted)">Keine Zahlungen vorhanden.</td></tr>';
     return;
   }
-  tbody.innerHTML = payments.map(p => `
+  tbody.innerHTML=payments.map(p=>`
     <tr>
-      <td style="font-size:.82rem">${esc(p.booking_date || '–')}</td>
-      <td>${esc(p.sender_name || '–')}</td>
-      <td style="font-size:.82rem;max-width:200px;overflow:hidden;text-overflow:ellipsis">${esc(p.reference || '–')}</td>
+      <td style="font-size:.82rem">${esc(p.booking_date||'–')}</td>
+      <td>${esc(p.sender_name||'–')}</td>
+      <td style="font-size:.82rem;max-width:200px;overflow:hidden;text-overflow:ellipsis">${esc(p.reference||'–')}</td>
       <td>${fmt(p.amount_eur)}</td>
-      <td>${p.person_name ? `<strong>${esc(p.person_name)}</strong>` : '<span style="color:var(--muted)">nicht zugeordnet</span>'}</td>
-      <td>
-        ${p.matched
-          ? (p.qr_sent
-              ? '<span class="badge badge-success">QR gesendet</span>'
-              : '<span class="badge badge-warning">Zahlung ok</span>')
-          : '<span class="badge badge-muted">offen</span>'}
-      </td>
-      <td>
-        ${p.matched && !p.qr_sent
-          ? `<button class="btn btn-success" style="padding:.3rem .7rem;font-size:.8rem"
-               onclick="sendTickets(${p.id}, this)">✉ Tickets senden</button>`
-          : ''}
-      </td>
+      <td>${p.person_name?`<strong>${esc(p.person_name)}</strong>`:'<span style="color:var(--muted)">nicht zugeordnet</span>'}</td>
+      <td>${p.matched?(p.qr_sent?'<span class="badge badge-success">QR gesendet</span>':'<span class="badge badge-warning">Zahlung ok</span>'):'<span class="badge badge-muted">offen</span>'}</td>
+      <td>${p.matched&&!p.qr_sent?`<button class="btn btn-success" style="padding:.3rem .7rem;font-size:.8rem" onclick="sendTickets(${p.id},this)">✉ Tickets senden</button>`:''}</td>
     </tr>
   `).join('');
 }
 
 window.sendTickets = async function(paymentId, btn) {
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>';
-
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>';
   try {
-    const res  = await fetch(`/api/payments/${paymentId}/send`, { method: 'POST' });
-    const data = await res.json();
-    if (res.ok) {
-      showAlert('paymentsAlert', `✅ Tickets an ${data.sentTo} gesendet.`, 'success');
-      loadPayments();
-    } else {
-      showAlert('paymentsAlert', data.error || 'Fehler beim Senden.');
-      btn.disabled = false;
-      btn.textContent = '✉ Tickets senden';
-    }
-  } catch {
-    showAlert('paymentsAlert', 'Verbindungsfehler.');
-    btn.disabled = false;
-    btn.textContent = '✉ Tickets senden';
-  }
+    const res=await fetch(`/api/payments/${paymentId}/send`,{method:'POST'});
+    const data=await res.json();
+    if (res.ok) { showAlert('paymentsAlert',`✅ Tickets an ${data.sentTo} gesendet.`,'success'); loadPayments(); }
+    else { showAlert('paymentsAlert',data.error||'Fehler.'); btn.disabled=false; btn.textContent='✉ Tickets senden'; }
+  } catch { showAlert('paymentsAlert','Verbindungsfehler.'); btn.disabled=false; btn.textContent='✉ Tickets senden'; }
 };
 
-// ── PDF hochladen ──────────────────────────────────────────────────────────────
+// ── PDF Upload ────────────────────────────────────────────────────────────
 function setupPdfUpload() {
   document.getElementById('pdfUploadBtn')?.addEventListener('click', async () => {
-    const fileInput = document.getElementById('pdfFiles');
-    if (!fileInput.files.length) {
-      showAlert('pdfUploadAlert', 'Bitte mindestens eine PDF-Datei auswählen.', 'warning');
-      return;
-    }
-
-    setBtn('pdfUploadBtn', true, '<span class="spinner"></span> Verarbeite PDFs…');
+    const fi = document.getElementById('pdfFiles');
+    if (!fi.files.length) { showAlert('pdfUploadAlert','Bitte mindestens eine PDF auswählen.','warning'); return; }
+    setBtn('pdfUploadBtn',true,'<span class="spinner"></span> Verarbeite PDFs…');
     clearAlert('pdfUploadAlert');
-    document.getElementById('pdfResultCard').style.display = 'none';
-
-    const form = new FormData();
-    for (const f of fileInput.files) form.append('pdfs', f);
-
+    document.getElementById('pdfResultCard').style.display='none';
+    const form=new FormData();
+    for (const f of fi.files) form.append('pdfs',f);
     try {
-      const res  = await fetch('/api/admin/upload-pdf', { method: 'POST', body: form });
-      const data = await res.json();
+      const res=await fetch('/api/admin/upload-pdf',{method:'POST',body:form});
+      const data=await res.json();
       if (res.ok) {
-        showAlert('pdfUploadAlert', `✅ ${data.inserted} neue Zahlung(en) importiert, ${data.matched} zugeordnet.`, 'success');
-        const resultCard = document.getElementById('pdfResultCard');
-        resultCard.style.display = 'block';
-        document.getElementById('pdfResultContent').innerHTML =
-          `<p>Zeilen gesamt: <strong>${data.total}</strong></p>` +
-          `<p>Davon Abiball-Referenzen erkannt: <strong>${data.abiballs ?? data.matched}</strong></p>`;
-        loadPayments();
-        loadStats();
-        loadOrders();
-        loadDashUnpaid();
-      } else {
-        showAlert('pdfUploadAlert', data.error || 'Fehler beim Verarbeiten.');
-      }
-    } catch {
-      showAlert('pdfUploadAlert', 'Verbindungsfehler.');
-    } finally {
-      setBtn('pdfUploadBtn', false, '📤 PDFs hochladen &amp; abgleichen');
-    }
+        showAlert('pdfUploadAlert',`✅ ${data.inserted||data.newlyPaid||0} neue Zahlung(en) importiert.`,'success');
+        const rc=document.getElementById('pdfResultCard');
+        rc.style.display='block';
+        document.getElementById('pdfResultContent').innerHTML=
+          `<p>Verarbeitet: <strong>${data.processed}</strong></p><p>Neu bezahlt: <strong>${data.newlyPaid}</strong></p>`;
+        loadPayments(); loadStats(); loadOrders(); loadDashUnpaid();
+      } else showAlert('pdfUploadAlert',data.error||'Fehler.');
+    } catch { showAlert('pdfUploadAlert','Verbindungsfehler.'); }
+    finally { setBtn('pdfUploadBtn',false,'📤 PDFs hochladen &amp; abgleichen'); }
   });
 }
 
-// ── CSV hochladen ─────────────────────────────────────────────────────────────
+// ── CSV Upload ────────────────────────────────────────────────────────────
 function setupCsvUpload() {
   document.getElementById('csvUploadBtn')?.addEventListener('click', async () => {
-    const fileInput = document.getElementById('statementFile');
-    if (!fileInput.files.length) {
-      showAlert('csvUploadAlert', 'Bitte eine Datei auswählen.', 'warning');
-      return;
-    }
-
-    setBtn('csvUploadBtn', true, '<span class="spinner"></span> Verarbeite…');
+    const fi=document.getElementById('statementFile');
+    if (!fi.files.length) { showAlert('csvUploadAlert','Bitte eine Datei auswählen.','warning'); return; }
+    setBtn('csvUploadBtn',true,'<span class="spinner"></span> Verarbeite…');
     clearAlert('csvUploadAlert');
-
-    const form = new FormData();
-    form.append('statement', fileInput.files[0]);
-
+    const form=new FormData(); form.append('statement',fi.files[0]);
     try {
-      const res  = await fetch('/api/admin/upload-statement', { method: 'POST', body: form });
-      const data = await res.json();
+      const res=await fetch('/api/admin/upload-statement',{method:'POST',body:form});
+      const data=await res.json();
       if (res.ok) {
-        showAlert('csvUploadAlert', `✅ ${data.inserted} neue Zahlung(en), ${data.matched} zugeordnet.`, 'success');
-        loadPayments();
-        loadStats();
-        loadOrders();
-        loadDashUnpaid();
-      } else {
-        showAlert('csvUploadAlert', data.error || 'Fehler beim Verarbeiten.');
-      }
-    } catch {
-      showAlert('csvUploadAlert', 'Verbindungsfehler.');
-    } finally {
-      setBtn('csvUploadBtn', false, 'Hochladen &amp; prüfen');
-    }
+        showAlert('csvUploadAlert',`✅ ${data.inserted} neue Zahlung(en), ${data.matched} zugeordnet.`,'success');
+        loadPayments(); loadStats(); loadOrders(); loadDashUnpaid();
+      } else showAlert('csvUploadAlert',data.error||'Fehler.');
+    } catch { showAlert('csvUploadAlert','Verbindungsfehler.'); }
+    finally { setBtn('csvUploadBtn',false,'Hochladen &amp; prüfen'); }
   });
 }
 
-// ── Einstellungen ─────────────────────────────────────────────────────────────
+// ── Settings ─────────────────────────────────────────────────────────────
 async function loadSettings() {
   try {
-    const res  = await fetch('/api/admin/settings');
-    if (res.status === 401) return;
-    const data = await res.json();
-    const s    = data.settings || {};
-
-    document.getElementById('s-event-name').value     = s.event_name     || '';
-    document.getElementById('s-event-date').value     = s.event_date     || '';
-    document.getElementById('s-event-location').value = s.event_location || '';
-    document.getElementById('s-ticket-price').value   = s.ticket_price   || '';
-    document.getElementById('s-bank-name').value      = s.bank_recipient || '';
-    document.getElementById('s-bank-iban').value      = s.bank_iban      || '';
-    document.getElementById('s-bank-bic').value       = s.bank_bic       || '';
-
-    document.getElementById('settingsPreview').textContent = JSON.stringify(s, null, 2);
-
-    const envDiv = document.getElementById('envStatusContent');
+    const res=await fetch('/api/admin/settings');
+    if (res.status===401) return;
+    const data=await res.json();
+    const s=data.settings||{};
+    document.getElementById('s-event-name').value     = s.event_name||'';
+    document.getElementById('s-event-date').value     = s.event_date||'';
+    document.getElementById('s-event-location').value = s.event_location||'';
+    document.getElementById('s-ticket-price').value   = s.ticket_price||'';
+    document.getElementById('s-bank-name').value      = s.bank_recipient||'';
+    document.getElementById('s-bank-iban').value      = s.bank_iban||'';
+    document.getElementById('s-bank-bic').value       = s.bank_bic||'';
+    document.getElementById('settingsPreview').textContent = JSON.stringify(s,null,2);
+    const envDiv=document.getElementById('envStatusContent');
     if (data.env) {
-      envDiv.innerHTML = Object.entries(data.env).map(([k, v]) =>
+      envDiv.innerHTML=Object.entries(data.env).map(([k,v])=>
         `<div style="display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid var(--border)">
           <code style="font-size:.85rem">${esc(k)}</code>
-          <span class="badge ${v ? 'badge-success' : 'badge-muted'}">${v ? '✅ Gesetzt' : '❌ Nicht gesetzt'}</span>
-        </div>`
-      ).join('');
+          <span class="badge ${v?'badge-success':'badge-muted'}">${v?'✅ Gesetzt':'❌ Nicht gesetzt'}</span>
+        </div>`).join('');
     }
-  } catch {
-    // silent
-  }
+  } catch { /* silent */ }
 }
 
 function setupSettingsSave() {
   document.getElementById('saveEventBtn')?.addEventListener('click', async () => {
     clearAlert('settingsEventAlert');
-    const body = {
+    const body={
       event_name:     document.getElementById('s-event-name').value,
       event_date:     document.getElementById('s-event-date').value,
       event_location: document.getElementById('s-event-location').value,
-      ticket_price:   parseFloat(document.getElementById('s-ticket-price').value) || null,
+      ticket_price:   parseFloat(document.getElementById('s-ticket-price').value)||null,
     };
     try {
-      const res = await fetch('/api/admin/settings', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(body),
-      });
-      if (res.ok) showAlert('settingsEventAlert', '✅ Gespeichert.', 'success');
-      else        showAlert('settingsEventAlert', 'Fehler beim Speichern.');
+      const res=await fetch('/api/admin/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      if (res.ok) showAlert('settingsEventAlert','✅ Gespeichert.','success');
+      else        showAlert('settingsEventAlert','Fehler beim Speichern.');
       loadSettings();
-    } catch {
-      showAlert('settingsEventAlert', 'Verbindungsfehler.');
-    }
+    } catch { showAlert('settingsEventAlert','Verbindungsfehler.'); }
   });
 
   document.getElementById('saveBankBtn')?.addEventListener('click', async () => {
     clearAlert('settingsBankAlert');
-    const body = {
+    const body={
       bank_recipient: document.getElementById('s-bank-name').value,
       bank_iban:      document.getElementById('s-bank-iban').value,
       bank_bic:       document.getElementById('s-bank-bic').value,
     };
     try {
-      const res = await fetch('/api/admin/settings', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(body),
-      });
-      if (res.ok) showAlert('settingsBankAlert', '✅ Gespeichert.', 'success');
-      else        showAlert('settingsBankAlert', 'Fehler beim Speichern.');
+      const res=await fetch('/api/admin/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      if (res.ok) showAlert('settingsBankAlert','✅ Gespeichert.','success');
+      else        showAlert('settingsBankAlert','Fehler beim Speichern.');
       loadSettings();
+    } catch { showAlert('settingsBankAlert','Verbindungsfehler.'); }
+  });
+}
+
+// ───────────────────────────────────────────────────────────────────────────────
+// ⚠️  DANGER ZONE UI
+// ───────────────────────────────────────────────────────────────────────────────
+function setupDangerZone() {
+  const panel     = document.getElementById('dangerPanel');
+  const toggleBtn = document.getElementById('dangerToggleBtn');
+
+  // Toggle visibility
+  toggleBtn?.addEventListener('click', () => {
+    const hidden = panel.style.display === 'none' || panel.style.display === '';
+    panel.style.display = hidden ? 'block' : 'none';
+    toggleBtn.textContent = hidden ? '▲ Danger Zone ausblenden' : '⚠️ Danger Zone öffnen';
+  });
+
+  // Helper: confirm + send danger request
+  async function dangerRequest(url, confirmMsg, successMsg) {
+    const pw = document.getElementById('dangerPassword').value;
+    if (!pw) { showAlert('dangerAlert', 'Bitte Danger-Passwort eingeben.', 'warning'); return; }
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      const res  = await fetch(url, {
+        method:  'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ dangerPassword: pw }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showAlert('dangerAlert', `✅ ${successMsg}`, 'success');
+        // Clear ID fields
+        document.getElementById('dangerPersonId').value  = '';
+        document.getElementById('dangerOrderId').value   = '';
+        document.getElementById('dangerPaymentId').value = '';
+        // Refresh all tables
+        loadPersons(); loadOrders(); loadPayments(); loadStats(); loadDashUnpaid();
+      } else {
+        showAlert('dangerAlert', data.error || 'Fehler.');
+      }
     } catch {
-      showAlert('settingsBankAlert', 'Verbindungsfehler.');
+      showAlert('dangerAlert', 'Verbindungsfehler.');
     }
+  }
+
+  // Delete single person
+  document.getElementById('dangerDeletePersonBtn')?.addEventListener('click', () => {
+    const id = document.getElementById('dangerPersonId').value.trim();
+    if (!id) { showAlert('dangerAlert', 'Bitte Personen-ID eingeben.', 'warning'); return; }
+    dangerRequest(
+      `/api/admin/danger/person/${id}`,
+      `Person #${id} + alle zugehörigen Daten wirklich löschen? Das ist NICHT rückgängig zu machen!`,
+      `Person #${id} und alle zugehörigen Daten gelöscht.`
+    );
+  });
+
+  // Delete single order
+  document.getElementById('dangerDeleteOrderBtn')?.addEventListener('click', () => {
+    const id = document.getElementById('dangerOrderId').value.trim();
+    if (!id) { showAlert('dangerAlert', 'Bitte Bestell-ID eingeben.', 'warning'); return; }
+    dangerRequest(
+      `/api/admin/danger/order/${id}`,
+      `Bestellung #${id} wirklich löschen?`,
+      `Bestellung #${id} gelöscht.`
+    );
+  });
+
+  // Delete single payment
+  document.getElementById('dangerDeletePaymentBtn')?.addEventListener('click', () => {
+    const id = document.getElementById('dangerPaymentId').value.trim();
+    if (!id) { showAlert('dangerAlert', 'Bitte Zahlungs-ID eingeben.', 'warning'); return; }
+    dangerRequest(
+      `/api/admin/danger/payment/${id}`,
+      `Zahlung #${id} löschen? Zugehörige Bestellung wird auf \"unbezahlt\" zurückgesetzt.`,
+      `Zahlung #${id} gelöscht.`
+    );
+  });
+
+  // NUCLEAR: delete ALL
+  document.getElementById('dangerDeleteAllBtn')?.addEventListener('click', () => {
+    dangerRequest(
+      '/api/admin/danger/all',
+      '❗ ACHTUNG: ALLE Personen, Bestellungen und Zahlungen werden gelöscht! Wirklich fortfahren?',
+      'Alle Daten wurden gelöscht.'
+    );
   });
 }
