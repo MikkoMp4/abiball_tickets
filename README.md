@@ -17,7 +17,7 @@ Github Repo zum halb-automatisieren vom Verkauf der Abiball Tickets!
 ## Screenshots
 
 ### Startseite – Zugangscode eingeben
-![Startseite](https://github.com/user-attachments/assets/59fccecd-a15e-4240-8159-83b9223cf7b8")
+![Startseite](https://github.com/user-attachments/assets/a98a5765-28a1-4856-9b29-2551b404f223)
 
 ## Setup
 
