@@ -23,6 +23,15 @@ const pdfUpload = multer({
   fileFilter: (_req, file, cb) => cb(null, path.extname(file.originalname).toLowerCase() === '.pdf'),
 });
 
+const statementUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, ['.csv', '.xlsx', '.xls'].includes(ext));
+  },
+});
+
 const RAW_DANGER_PW = process.env.DANGER_PASSWORD || '';
 let hashedDangerPw  = null;
 (async () => { if (RAW_DANGER_PW) hashedDangerPw = await bcrypt.hash(RAW_DANGER_PW, 10); })();
@@ -158,6 +167,149 @@ router.post('/upload-pdf', pdfUpload.array('pdfs', 20), async (req, res) => {
   }
 
   res.json({ processed: allResults.length, newlyPaid: newlyFullyPaid.length, emailsSent: emailResults, results: allResults });
+});
+
+// ── CSV / Excel Kontoauszug hochladen ─────────────────────────────────────────
+router.post('/upload-statement', statementUpload.single('statement'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen' });
+
+  const db   = getDb();
+  const ext  = path.extname(req.file.originalname).toLowerCase();
+  const rows = [];
+
+  try {
+    if (ext === '.csv') {
+      // Parse CSV: split lines, detect separator, map columns
+      const text  = req.file.buffer.toString('utf-8').replace(/^\uFEFF/, ''); // strip BOM
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) return res.status(400).json({ error: 'CSV ist leer oder hat keine Datenzeilen' });
+
+      const sep    = lines[0].includes(';') ? ';' : ',';
+      const header = lines[0].split(sep).map(h => h.replace(/^"|"$/g, '').trim().toLowerCase());
+
+      // Flexible column detection – support common German/English bank CSV headers
+      const colIdx = (candidates) => {
+        for (const c of candidates) {
+          const i = header.findIndex(h => h.includes(c));
+          if (i !== -1) return i;
+        }
+        return -1;
+      };
+
+      const dateCol   = colIdx(['buchungstag', 'buchungsdatum', 'valuta', 'date', 'datum']);
+      const nameCol   = colIdx(['auftraggeber', 'beguenstigter', 'name', 'sender', 'absender', 'empfaenger']);
+      const refCol    = colIdx(['verwendungszweck', 'reference', 'referenz', 'betreff', 'description', 'buchungstext']);
+      const amtCol    = colIdx(['betrag', 'amount', 'umsatz', 'wert']);
+
+      if (refCol === -1 || amtCol === -1) {
+        return res.status(400).json({ error: 'CSV-Format nicht erkannt: Spalten "Verwendungszweck" und "Betrag" werden benötigt.' });
+      }
+
+      for (let i = 1; i < lines.length; i++) {
+        // Respect quoted fields that may contain the separator
+        const cols = lines[i].match(/(".*?"|[^;,]+)(?=[;,]|$)/g) || lines[i].split(sep);
+        const clean = (idx) => idx !== -1 && cols[idx] ? cols[idx].replace(/^"|"$/g, '').trim() : '';
+
+        const rawAmt = clean(amtCol).replace(/\./g, '').replace(',', '.');
+        const amount = parseFloat(rawAmt);
+        if (isNaN(amount)) continue; // skip non-numeric rows (header duplicates, totals, etc.)
+
+        rows.push({
+          booking_date: clean(dateCol) || new Date().toISOString().slice(0, 10),
+          sender_name:  clean(nameCol) || 'Unbekannt',
+          reference:    clean(refCol),
+          amount_eur:   amount,
+        });
+      }
+    } else {
+      // Excel (.xlsx / .xls) via ExcelJS
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(req.file.buffer);
+      const ws = workbook.worksheets[0];
+      if (!ws) return res.status(400).json({ error: 'Excel-Datei enthält kein Worksheet' });
+
+      // Row 1 = header
+      const header = [];
+      ws.getRow(1).eachCell((cell, colNum) => { header[colNum] = String(cell.value || '').trim().toLowerCase(); });
+
+      const colIdx = (candidates) => {
+        for (const c of candidates) {
+          const i = header.findIndex(h => h && h.includes(c));
+          if (i !== -1) return i;
+        }
+        return -1;
+      };
+
+      const dateCol = colIdx(['buchungstag', 'buchungsdatum', 'valuta', 'date', 'datum']);
+      const nameCol = colIdx(['auftraggeber', 'beguenstigter', 'name', 'sender', 'absender', 'empfaenger']);
+      const refCol  = colIdx(['verwendungszweck', 'reference', 'referenz', 'betreff', 'description', 'buchungstext']);
+      const amtCol  = colIdx(['betrag', 'amount', 'umsatz', 'wert']);
+
+      if (refCol === -1 || amtCol === -1) {
+        return res.status(400).json({ error: 'Excel-Format nicht erkannt: Spalten "Verwendungszweck" und "Betrag" werden benötigt.' });
+      }
+
+      ws.eachRow((row, rowNum) => {
+        if (rowNum === 1) return; // skip header
+        const get = (idx) => idx !== -1 ? String(row.getCell(idx).value || '').trim() : '';
+        const rawAmt = get(amtCol).replace(/\./g, '').replace(',', '.');
+        const amount = parseFloat(rawAmt);
+        if (isNaN(amount)) return;
+        rows.push({
+          booking_date: get(dateCol) || new Date().toISOString().slice(0, 10),
+          sender_name:  get(nameCol) || 'Unbekannt',
+          reference:    get(refCol),
+          amount_eur:   amount,
+        });
+      });
+    }
+  } catch (err) {
+    return res.status(400).json({ error: `Datei konnte nicht gelesen werden: ${err.message}` });
+  }
+
+  if (!rows.length) return res.status(400).json({ error: 'Keine verarbeitbaren Zeilen in der Datei gefunden' });
+
+  // Match rows against orders and insert payments
+  const allResults = [];
+  const affectedPersonIds = new Set();
+
+  for (const row of rows) {
+    const ref   = (row.reference || '').toUpperCase();
+    const match = ref.match(/ABIBALL-([A-Z0-9]{4,12})/);
+    const person = match ? db.prepare('SELECT * FROM persons WHERE code = ?').get(match[1]) : null;
+    const order  = person ? db.prepare('SELECT * FROM orders WHERE person_id = ? AND submitted = 1 ORDER BY id DESC LIMIT 1').get(person.id) : null;
+
+    if (person && order && !isNaN(row.amount_eur)) {
+      const existing = db.prepare('SELECT id FROM payments WHERE reference = ?').get(ref);
+      if (!existing) {
+        db.prepare("INSERT INTO payments (person_id, amount_eur, reference, sender_name, booking_date, matched) VALUES (?, ?, ?, ?, ?, 1)")
+          .run(person.id, row.amount_eur, ref, row.sender_name || person.name, row.booking_date);
+        affectedPersonIds.add(person.id);
+      }
+    }
+    allResults.push({ reference: ref, amount: row.amount_eur, sender: row.sender_name, personName: person?.name || null, matched: !!person });
+  }
+
+  // Recalculate payment status and send ticket emails for newly paid orders
+  const newlyFullyPaid = [];
+  for (const personId of affectedPersonIds) {
+    const { nowFullyPaid, order } = recalcPaymentStatus(db, personId);
+    if (nowFullyPaid && order) newlyFullyPaid.push({ person: db.prepare('SELECT * FROM persons WHERE id = ?').get(personId), order });
+  }
+
+  const emailResults = [];
+  for (const { person, order } of newlyFullyPaid) {
+    try { emailResults.push({ person: person.name, sentTo: await sendTicketsForOrder(db, person, order), ok: true }); }
+    catch (err) { emailResults.push({ person: person.name, error: err.message, ok: false }); }
+  }
+
+  res.json({
+    processed:   allResults.length,
+    matched:     allResults.filter(r => r.matched).length,
+    newlyPaid:   newlyFullyPaid.length,
+    emailsSent:  emailResults,
+    results:     allResults,
+  });
 });
 
 // ── Gesamte Bestellung als bezahlt markieren ─────────────────────────────────
