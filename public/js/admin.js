@@ -236,14 +236,12 @@ function renderOrders(orders) {
   }
   tbody.innerHTML = filtered.map(o => {
     const ticketRows = (o.tickets || []).map((t, i) => {
-      // For split orders: show badge + per-ticket mark-paid button if not yet paid
       const splitBadgeHtml = o.split_payment
         ? `<span style="margin-left:.3rem">${splitTicketBadge(t)}</span>`
         : '';
       const splitRefHtml = o.split_payment && t.split_ref
         ? `<code style="font-size:.7rem;color:var(--muted);display:block">${esc(t.split_ref)}</code>`
         : '';
-      // Per-ticket mark-paid button: only for split orders with unpaid tickets
       const ticketMarkPaidBtn = (o.split_payment && !t.ticket_paid)
         ? `<button class="btn btn-success" style="padding:.2rem .45rem;font-size:.72rem;white-space:nowrap" onclick="adminMarkTicketPaid(${o.id},${t.id},this)" title="Dieses Ticket als bezahlt markieren">✓ bezahlt</button>`
         : '';
@@ -267,7 +265,6 @@ function renderOrders(orders) {
       ? `<span title="Separat-Zahlung" style="margin-left:.4rem;font-size:.8rem">💳</span>`
       : '';
 
-    // Whole-order mark-paid button: show remaining amount for partial orders
     let markPaidBtn = '';
     if (o.paid !== 1) {
       const remaining = o.paid === 2
@@ -419,7 +416,7 @@ function setupPdfUpload() {
 function setupCsvUpload() {
   document.getElementById('csvUploadBtn')?.addEventListener('click', async () => {
     const fi = document.getElementById('statementFile');
-    if (!fi.files.length) { showAlert('csvUploadAlert', 'Bitte eine Datei auswählen.', 'warning'); return; }\
+    if (!fi.files.length) { showAlert('csvUploadAlert', 'Bitte eine Datei auswählen.', 'warning'); return; }
     setBtn('csvUploadBtn', true, '<span class="spinner"></span> Verarbeite…');
     clearAlert('csvUploadAlert');
     const form = new FormData();
