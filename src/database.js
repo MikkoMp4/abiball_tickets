@@ -5,8 +5,9 @@ const Database = require('better-sqlite3');
 const path     = require('path');
 const fs       = require('fs');
 
-// Always store DB in /app/data/abiball.db — mounted via ./data:/app/data in compose
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'abiball.db');
+// DATA_DIR comes from .env (e.g. DATA_DIR=/app), DB file sits inside it
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..');
+const DB_PATH  = process.env.DB_PATH  || path.join(DATA_DIR, 'abiball.sqlite');
 
 let db;
 let settingsCache = null;
@@ -19,7 +20,6 @@ function getDb() {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 
-  // ── Schema ────────────────────────────────────────────────────────────────
   db.exec(`
     CREATE TABLE IF NOT EXISTS persons (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,7 +68,6 @@ function getDb() {
     );
   `);
 
-  // ── Idempotente Migrationen ───────────────────────────────────────────────
   function hasColumn(table, column) {
     return db.prepare(`PRAGMA table_info(${table})`).all().some(r => r.name === column);
   }
