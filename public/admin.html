@@ -27,14 +27,14 @@
       margin-bottom: 1rem; text-align: center; outline: none;
       transition: border-color .2s;
     }
-    #loginOverlay input[type=password]:focus { border-color: var(--primary, #2563eb); }
+    #loginOverlay input[type=password]:focus { border-color: var(--primary, #e05a00); }
     #loginOverlay .btn-login {
       width: 100%; padding: .75rem;
-      background: var(--primary, #2563eb); color: #fff;
+      background: var(--primary, #e05a00); color: #fff;
       border: none; border-radius: 8px; font-size: 1rem;
       font-weight: 600; cursor: pointer; transition: background .2s;
     }
-    #loginOverlay .btn-login:hover    { background: var(--primary-dark, #1d4ed8); }
+    #loginOverlay .btn-login:hover    { background: var(--primary-dark, #c04800); }
     #loginOverlay .btn-login:disabled { opacity: .6; cursor: not-allowed; }
     #loginError {
       color: #dc2626; font-size: .875rem;
@@ -220,8 +220,8 @@
         <button class="btn btn-outline" style="padding:.35rem .85rem;font-size:.85rem" onclick="loadOrders()">&#x1F504; Aktualisieren</button>
       </div>
       <div style="overflow-x:auto">
-        <table><thead><tr><th>Person</th><th>E-Mail</th><th>Code</th><th>Tickets</th><th>Betrag</th><th>Status</th><th>Bestellt</th><th></th></tr></thead>
-          <tbody id="ordersTbody"><tr><td colspan="8" style="text-align:center;color:var(--muted)">Lade…</td></tr></tbody>
+        <table><thead><tr><th>Person</th><th>Code</th><th>Tickets (Name &lt;E-Mail&gt;)</th><th>Betrag</th><th>Status</th><th>Bestellt</th><th></th></tr></thead>
+          <tbody id="ordersTbody"><tr><td colspan="7" style="text-align:center;color:var(--muted)">Lade…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -233,13 +233,14 @@
       <h2>&#x2795; Schüler &amp; Tickets erfassen</h2>
       <div id="genAlert"></div>
       <p style="font-size:.9rem;color:var(--muted);margin-bottom:1rem">
-        Füge pro Zeile eine Person ein: <code>Name; E-Mail (optional); Anzahl Tickets</code><br>
-        Beispiel: <code>Max Mustermann; max@schule.de; 2</code>
+        Füge pro Zeile eine Person ein: <code>Name; Anzahl Tickets</code><br>
+        Die E-Mail-Adresse wird von den Ticket-Inhabern selbst beim Bestellen eingegeben.<br>
+        Beispiel: <code>Max Mustermann; 2</code>
       </p>
       <div class="form-group"><label for="personsBulk">Personen (eine pro Zeile)</label>
-        <textarea id="personsBulk" rows="8" placeholder="Max Mustermann; max@schule.de; 2
-Erika Muster; ; 1
-Anna Schmidt; anna@example.com; 3"></textarea>
+        <textarea id="personsBulk" rows="8" placeholder="Max Mustermann; 2
+Erika Muster; 1
+Anna Schmidt; 3"></textarea>
       </div>
       <button class="btn btn-primary" id="generateBtn">Codes generieren</button>
     </div>
@@ -254,8 +255,8 @@ Anna Schmidt; anna@example.com; 3"></textarea>
       <h2>📋 Alle Personen</h2>
       <div id="personsAlert"></div>
       <div style="overflow-x:auto">
-        <table><thead><tr><th>Name</th><th>E-Mail</th><th>Code</th><th># Tickets</th><th>Bestellt</th><th>Bezahlt</th><th>Erstellt</th><th></th></tr></thead>
-          <tbody id="personsTbody"><tr><td colspan="8" style="text-align:center;color:var(--muted)">Lade…</td></tr></tbody>
+        <table><thead><tr><th>Name</th><th>Code</th><th># Tickets</th><th>Bestellt</th><th>Bezahlt</th><th>Erstellt</th><th></th></tr></thead>
+          <tbody id="personsTbody"><tr><td colspan="7" style="text-align:center;color:var(--muted)">Lade…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -269,122 +270,101 @@ Anna Schmidt; anna@example.com; 3"></textarea>
       <div class="settings-grid">
         <div class="form-group"><label for="s-event-name">Veranstaltungsname</label><input type="text" id="s-event-name" placeholder="Abiball 2026"></div>
         <div class="form-group"><label for="s-event-date">Datum</label><input type="text" id="s-event-date" placeholder="20.06.2026"></div>
-        <div class="form-group" style="grid-column:1/-1"><label for="s-event-location">Veranstaltungsort</label><input type="text" id="s-event-location" placeholder="Eventlocation, Musterstadt"></div>
-        <div class="form-group"><label for="s-ticket-price">Ticketpreis (EUR)</label><input type="number" id="s-ticket-price" step="0.01" min="0" placeholder="45.00"></div>
+        <div class="form-group" style="grid-column:1/-1"><label for="s-event-location">Veranstaltungsort</label><input type="text" id="s-event-location" placeholder="Festsaal Musterstadt"></div>
+        <div class="form-group"><label for="s-ticket-price">Ticketpreis (EUR)</label><input type="number" id="s-ticket-price" placeholder="45" step="0.01"></div>
       </div>
-      <button class="btn btn-primary" id="saveEventBtn">💾 Veranstaltungsdaten speichern</button>
+      <button class="btn btn-primary" id="saveEventBtn">💾 Speichern</button>
     </div>
     <div class="card">
-      <h2>🏦 Bankverbindung &amp; QR-Code-Einstellungen</h2>
+      <h2>🏦 Bankverbindung</h2>
       <div id="settingsBankAlert"></div>
       <div class="settings-grid">
-        <div class="form-group" style="grid-column:1/-1"><label for="s-bank-name">Kontoinhaber / Empfängername</label><input type="text" id="s-bank-name" placeholder="Abiball-Komitee e.V."></div>
-        <div class="form-group"><label for="s-bank-iban">IBAN</label><input type="text" id="s-bank-iban" placeholder="DE00 1234 5678 9012 3456 78"></div>
-        <div class="form-group"><label for="s-bank-bic">BIC / SWIFT</label><input type="text" id="s-bank-bic" placeholder="XXXXXXXX"></div>
+        <div class="form-group" style="grid-column:1/-1"><label for="s-bank-name">Kontoinhaber</label><input type="text" id="s-bank-name" placeholder="Abiturkomitee 2026"></div>
+        <div class="form-group"><label for="s-bank-iban">IBAN</label><input type="text" id="s-bank-iban" placeholder="DE00 0000 0000 0000 0000 00"></div>
+        <div class="form-group"><label for="s-bank-bic">BIC</label><input type="text" id="s-bank-bic" placeholder="XXXXXXXX"></div>
       </div>
-      <button class="btn btn-primary" id="saveBankBtn">💾 Bankdaten speichern</button>
+      <button class="btn btn-primary" id="saveBankBtn">💾 Speichern</button>
     </div>
     <div class="card">
-      <h2>👁 Aktuelle Konfiguration (Datenbank)</h2>
-      <pre id="settingsPreview" style="background:#f5f5f5;padding:1rem;border-radius:var(--radius);font-size:.85rem;overflow-x:auto">Lade…</pre>
+      <h2>🔍 Aktuelle Einstellungen (JSON)</h2>
+      <pre id="settingsPreview" style="background:#f5f5f5;padding:1rem;border-radius:8px;font-size:.82rem;overflow-x:auto"></pre>
     </div>
     <div class="card">
-      <h2>🐳 Docker-Umgebungsvariablen</h2>
-      <div id="envStatusContent">Lade…</div>
+      <h2>🌍 Umgebungsvariablen-Status</h2>
+      <div id="envStatusContent"></div>
     </div>
   </div>
 
-  <!-- ── TAB: DANGER ZONE ─────────────────────────────────────────────── -->
+  <!-- ── TAB: Danger Zone ─────────────────────────────────────────────── -->
   <div class="tab-pane" id="tab-danger">
-
-    <div style="background:#7f1d1d;color:#fff;border-radius:10px;padding:1.25rem 1.5rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:1rem">
-      <span style="font-size:2rem">⚠️</span>
-      <div>
-        <strong style="font-size:1.05rem">Danger Zone – nur für Testzwecke</strong><br>
-        <span style="font-size:.88rem;opacity:.85">Alle Aktionen hier sind <u>nicht rückgängig zu machen</u>. Jede Aktion erfordert das separate Danger-Passwort.</span>
-      </div>
-    </div>
-
-    <!-- Shared danger password input -->
     <div class="danger-zone-card">
-      <h2>🔑 Danger-Passwort</h2>
-      <p style="font-size:.9rem;color:#6b7280;margin-bottom:1rem">Gib hier einmalig das Danger-Passwort ein. Es wird für alle Aktionen auf dieser Seite verwendet.</p>
+      <h2>⚠️ Danger Zone</h2>
+      <p style="font-size:.9rem;color:#6b7280;margin-bottom:1.25rem">
+        Alle Aktionen hier sind <strong>unwiderruflich</strong> und erfordern das separate Danger-Passwort.
+        Nur für Test- und Debugzwecke verwenden.
+      </p>
+
       <div class="danger-pw-row">
         <div>
-          <label for="dangerPwInput">Danger-Passwort</label>
-          <input type="password" id="dangerPwInput" placeholder="••••••••" autocomplete="off">
+          <label for="dangerPwInput">🔑 Danger-Passwort</label>
+          <input type="password" id="dangerPwInput" placeholder="Geheimes Passwort" autocomplete="off">
         </div>
       </div>
-    </div>
 
-    <!-- Delete single person -->
-    <div class="danger-zone-card">
-      <h2>🗑 Person löschen</h2>
-      <p style="font-size:.88rem;color:#6b7280;margin-bottom:1rem">Löscht eine Person inkl. aller zugehörigen Bestellungen, Tickets &amp; Zahlungen (Cascade).</p>
-      <div class="danger-action-row">
-        <div class="action-info">
-          <strong>Person nach ID löschen</strong>
-          <span>Findet die Person-ID in der Personen-Tabelle (Tab „Personen“)</span>
+      <div class="danger-actions">
+
+        <!-- Delete Person -->
+        <div class="danger-action-row">
+          <div class="action-info">
+            <strong>Person löschen</strong>
+            <span>Löscht Person + alle Bestellungen, Tickets und Zahlungen dieser Person</span>
+          </div>
+          <div class="action-inputs">
+            <input type="number" id="dangerPersonId" class="id-input" placeholder="ID" min="1">
+            <button class="btn-danger-action" onclick="dangerDeletePerson()">🗑 Löschen</button>
+          </div>
         </div>
-        <div class="action-inputs">
-          <input type="number" class="id-input" id="dangerPersonId" placeholder="ID" min="1">
-          <button class="btn-danger-action" onclick="dangerDeletePerson()">Person löschen</button>
+
+        <!-- Delete Order -->
+        <div class="danger-action-row">
+          <div class="action-info">
+            <strong>Bestellung löschen</strong>
+            <span>Löscht eine einzelne Bestellung + alle zugehörigen Tickets</span>
+          </div>
+          <div class="action-inputs">
+            <input type="number" id="dangerOrderId" class="id-input" placeholder="ID" min="1">
+            <button class="btn-danger-action" onclick="dangerDeleteOrder()">🗑 Löschen</button>
+          </div>
         </div>
+
+        <!-- Delete Payment -->
+        <div class="danger-action-row">
+          <div class="action-info">
+            <strong>Zahlung löschen</strong>
+            <span>Löscht einen Zahlungseingang; setzt zugehörige Bestellung auf "unbezahlt" zurück</span>
+          </div>
+          <div class="action-inputs">
+            <input type="number" id="dangerPaymentId" class="id-input" placeholder="ID" min="1">
+            <button class="btn-danger-action" onclick="dangerDeletePayment()">🗑 Löschen</button>
+          </div>
+        </div>
+
+        <!-- Nuclear -->
+        <div class="danger-action-row" style="flex-direction:column;align-items:stretch">
+          <div class="action-info" style="margin-bottom:.75rem">
+            <strong style="color:#7f1d1d">☢️ Alle Daten löschen (Nuclear)</strong>
+            <span>Löscht ALLE Personen, Bestellungen, Tickets und Zahlungen. Nicht rückgängig zu machen.</span>
+          </div>
+          <input type="text" id="dangerNuclearConfirm"
+            placeholder='Zur Bestätigung "ALLES LÖSCHEN" eingeben'
+            style="width:100%;padding:.55rem .9rem;border:1.5px solid #fca5a5;border-radius:6px;font-size:.9rem;margin-bottom:.75rem;background:#fff">
+          <button class="btn-nuclear" onclick="dangerNuclear()">☢️ ALLES LÖSCHEN</button>
+        </div>
+
       </div>
+      <div id="dangerResult"></div>
     </div>
-
-    <!-- Delete single order -->
-    <div class="danger-zone-card">
-      <h2>🗑 Bestellung löschen</h2>
-      <p style="font-size:.88rem;color:#6b7280;margin-bottom:1rem">Löscht eine einzelne Bestellung inkl. ihrer Tickets.</p>
-      <div class="danger-action-row">
-        <div class="action-info">
-          <strong>Bestellung nach ID löschen</strong>
-          <span>Findet die Bestellungs-ID in der Bestellungen-Tabelle</span>
-        </div>
-        <div class="action-inputs">
-          <input type="number" class="id-input" id="dangerOrderId" placeholder="ID" min="1">
-          <button class="btn-danger-action" onclick="dangerDeleteOrder()">Bestellung löschen</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Delete single payment -->
-    <div class="danger-zone-card">
-      <h2>🗑 Zahlung löschen</h2>
-      <p style="font-size:.88rem;color:#6b7280;margin-bottom:1rem">Löscht einen Zahlungseingang. Falls zugeordnet, wird die Bestellung auf „unbezahlt“ zurückgesetzt.</p>
-      <div class="danger-action-row">
-        <div class="action-info">
-          <strong>Zahlung nach ID löschen</strong>
-          <span>Findet die Zahlungs-ID in der Zahlungs-Tabelle</span>
-        </div>
-        <div class="action-inputs">
-          <input type="number" class="id-input" id="dangerPaymentId" placeholder="ID" min="1">
-          <button class="btn-danger-action" onclick="dangerDeletePayment()">Zahlung löschen</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Nuclear option -->
-    <div class="danger-zone-card" style="border-color:#7f1d1d;background:#fff1f1">
-      <h2 style="color:#7f1d1d">☠️ ALLE DATEN LÖSCHEN</h2>
-      <p style="font-size:.88rem;color:#6b7280;margin-bottom:1rem">
-        Löscht <strong>sämtliche</strong> Personen, Bestellungen, Tickets und Zahlungen aus der Datenbank.
-        Diese Aktion ist absolut irreversibel.
-      </p>
-      <p style="font-size:.88rem;font-weight:600;color:#991b1b;margin-bottom:1rem">
-        Zur Bestätigung bitte "ALLES LÖSCHEN" in das Feld eingeben:
-      </p>
-      <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center">
-        <input type="text" id="dangerNuclearConfirm" placeholder='"ALLES LÖSCHEN" eingeben'
-          style="flex:1;min-width:200px;padding:.55rem .9rem;border:1.5px solid #fca5a5;border-radius:6px;font-size:.9rem">
-        <button class="btn-nuclear" id="dangerNuclearBtn" onclick="dangerNuclear()">☠️ Alle Daten unwiderruflich löschen</button>
-      </div>
-    </div>
-
-    <div id="dangerResult"></div>
-
-  </div><!-- /tab-danger -->
+  </div>
 
 </div><!-- /container -->
 </div><!-- /adminContent -->

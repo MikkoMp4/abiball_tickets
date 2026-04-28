@@ -4,16 +4,16 @@ const params   = new URLSearchParams(window.location.search);
 const personId = params.get('personId');
 const code     = params.get('code');
 
-const personCard  = document.getElementById('personCard');
-const personInfo  = document.getElementById('personInfo');
-const orderCard   = document.getElementById('orderCard');
-const paymentCard = document.getElementById('paymentCard');
-const ticketForms = document.getElementById('ticketForms');
-const totalPrice  = document.getElementById('totalPrice');
+const personCard     = document.getElementById('personCard');
+const personInfo     = document.getElementById('personInfo');
+const orderCard      = document.getElementById('orderCard');
+const paymentCard    = document.getElementById('paymentCard');
+const ticketForms    = document.getElementById('ticketForms');
+const totalPrice     = document.getElementById('totalPrice');
 const pricePerTicket = document.getElementById('pricePerTicket');
-const submitBtn   = document.getElementById('submitBtn');
-const alertBox    = document.getElementById('alertBox');
-const alertBox2   = document.getElementById('alertBox2');
+const submitBtn      = document.getElementById('submitBtn');
+const alertBox       = document.getElementById('alertBox');
+const alertBox2      = document.getElementById('alertBox2');
 
 let person = null;
 let config = null;
@@ -89,6 +89,7 @@ async function init() {
 }
 
 // ── Ticket-Formulare aufbauen ────────────────────────────────────────────────
+// Each ticket only needs: Name + E-Mail (no class, no extraInfo)
 function buildTicketForms(count) {
   ticketForms.innerHTML = '';
   for (let i = 1; i <= count; i++) {
@@ -98,16 +99,14 @@ function buildTicketForms(count) {
     div.innerHTML = `
       <strong>Ticket ${i}</strong>
       <div class="form-group" style="margin-top:.5rem">
-        <label>Name der Person *</label>
-        <input type="text" name="ticketName" placeholder="Vollständiger Name" required>
+        <label for="ticketName${i}">Name der Person *</label>
+        <input id="ticketName${i}" type="text" name="ticketName"
+          placeholder="Vollständiger Name" required autocomplete="name">
       </div>
       <div class="form-group">
-        <label>Klasse / Kurs</label>
-        <input type="text" name="ticketClass" placeholder="z. B. 12a">
-      </div>
-      <div class="form-group">
-        <label>Besondere Hinweise (Ernährung, Behinderung, …)</label>
-        <input type="text" name="extraInfo" placeholder="optional">
+        <label for="ticketEmail${i}">E-Mail-Adresse *</label>
+        <input id="ticketEmail${i}" type="email" name="ticketEmail"
+          placeholder="name@beispiel.de" required autocomplete="email">
       </div>
     `;
     ticketForms.appendChild(div);
@@ -130,16 +129,25 @@ submitBtn.addEventListener('click', async () => {
   const tickets = [];
   const forms = ticketForms.querySelectorAll('.card');
   for (const form of forms) {
-    const name  = form.querySelector('[name=ticketName]')?.value.trim();
+    const nameInput  = form.querySelector('[name=ticketName]');
+    const emailInput = form.querySelector('[name=ticketEmail]');
+    const name  = nameInput?.value.trim();
+    const email = emailInput?.value.trim();
+
     if (!name) {
       showAlert(alertBox, 'Bitte alle Ticket-Namen ausfüllen.');
-      form.querySelector('[name=ticketName]').focus();
+      nameInput.focus();
       return;
     }
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      showAlert(alertBox, 'Bitte eine gültige E-Mail-Adresse für jedes Ticket eingeben.');
+      emailInput.focus();
+      return;
+    }
+
     tickets.push({
       ticketName:  name,
-      ticketClass: form.querySelector('[name=ticketClass]')?.value.trim() || '',
-      extraInfo:   form.querySelector('[name=extraInfo]')?.value.trim() || '',
+      ticketEmail: email,
     });
   }
 

@@ -2,6 +2,7 @@
  * routes/admin.js – Admin-Endpunkte
  *
  * POST   /api/admin/generate-codes          – Codes für mehrere Personen generieren
+ *          Input format per person: { name, numTickets }  (email omitted – users enter it themselves)
  * GET    /api/admin/persons                 – Alle Personen auflisten
  * PATCH  /api/admin/persons/:id             – Person aktualisieren
  * DELETE /api/admin/persons/:id             – Person löschen
@@ -64,6 +65,8 @@ async function requireDangerPw(req, res, next) {
 }
 
 // ── POST /api/admin/generate-codes ──────────────────────────────────────────
+// Admin only enters: name + numTickets. Email is intentionally omitted —
+// each ticket holder enters their own e-mail on the order page.
 router.post('/generate-codes', (req, res) => {
   const { persons } = req.body;
   if (!Array.isArray(persons) || persons.length === 0) {
@@ -80,7 +83,12 @@ router.post('/generate-codes', (req, res) => {
 
   const insertMany = db.transaction(list => {
     return list.map((p, i) =>
-      insert.run({ name: p.name, email: p.email || '', code: codes[i], numTickets: p.numTickets || 1 })
+      insert.run({
+        name:       p.name || 'Unbekannt',
+        email:      '',          // email always empty – filled in by ticket holders
+        code:       codes[i],
+        numTickets: p.numTickets || 1,
+      })
     );
   });
 
@@ -114,12 +122,11 @@ router.patch('/persons/:id', (req, res) => {
   const person = db.prepare('SELECT * FROM persons WHERE id = ?').get(req.params.id);
   if (!person) return res.status(404).json({ error: 'Person nicht gefunden' });
 
-  const { name, email, numTickets } = req.body;
+  const { name, numTickets } = req.body;
   db.prepare(
-    'UPDATE persons SET name = ?, email = ?, num_tickets = ? WHERE id = ?'
+    'UPDATE persons SET name = ?, num_tickets = ? WHERE id = ?'
   ).run(
     name       ?? person.name,
-    email      ?? person.email,
     numTickets ?? person.num_tickets,
     req.params.id
   );
@@ -251,12 +258,11 @@ router.post('/orders/:id/mark-paid', (req, res) => {
 // ── GET /api/admin/export/csv ────────────────────────────────────────────────
 router.get('/export/csv', (req, res) => {
   const db      = getDb();
-  const persons = db.prepare('SELECT name, email, code, num_tickets FROM persons ORDER BY id').all();
+  const persons = db.prepare('SELECT name, code, num_tickets FROM persons ORDER BY id').all();
 
   const csvStringifier = createObjectCsvStringifier({
     header: [
       { id: 'name',        title: 'Name' },
-      { id: 'email',       title: 'E-Mail' },
       { id: 'code',        title: 'Zugangscode' },
       { id: 'num_tickets', title: 'Anzahl Tickets' },
     ],
@@ -271,18 +277,17 @@ router.get('/export/csv', (req, res) => {
 // ── GET /api/admin/export/excel ──────────────────────────────────────────────
 router.get('/export/excel', async (req, res) => {
   const db      = getDb();
-  const persons = db.prepare('SELECT name, email, code, num_tickets FROM persons ORDER BY id').all();
+  const persons = db.prepare('SELECT name, code, num_tickets FROM persons ORDER BY id').all();
 
   const workbook  = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('Zugangscodes');
   worksheet.columns = [
     { header: 'Name',           key: 'name',        width: 30 },
-    { header: 'E-Mail',         key: 'email',        width: 35 },
     { header: 'Zugangscode',    key: 'code',         width: 15 },
     { header: 'Anzahl Tickets', key: 'num_tickets',  width: 15 },
   ];
   worksheet.getRow(1).font = { bold: true };
-  worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCCE5FF' } };
+  worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE0CC' } };
   persons.forEach(p => worksheet.addRow(p));
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -295,17 +300,12 @@ router.get('/export/excel', async (req, res) => {
 // ⚠️  DANGER ZONE  – alle Endpunkte erfordern dangerPassword im Request-Body
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * DELETE /api/admin/danger/person/:id
- * Löscht eine Person + ihre Bestellungen + Tickets + Zahlungen (cascading).
- */
 router.delete('/danger/person/:id', requireDangerPw, (req, res) => {
   const db     = getDb();
   const person = db.prepare('SELECT * FROM persons WHERE id = ?').get(req.params.id);
   if (!person) return res.status(404).json({ error: 'Person nicht gefunden' });
 
   db.transaction(() => {
-    // Tickets aller Bestellungen dieser Person
     const orderIds = db.prepare('SELECT id FROM orders WHERE person_id = ?').all(req.params.id).map(o => o.id);
     for (const oid of orderIds) {
       db.prepare('DELETE FROM order_tickets WHERE order_id = ?').run(oid);
@@ -318,10 +318,6 @@ router.delete('/danger/person/:id', requireDangerPw, (req, res) => {
   res.json({ ok: true, deleted: 'person', id: req.params.id, name: person.name });
 });
 
-/**
- * DELETE /api/admin/danger/order/:id
- * Löscht eine einzelne Bestellung + ihre Tickets.
- */
 router.delete('/danger/order/:id', requireDangerPw, (req, res) => {
   const db    = getDb();
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
@@ -335,17 +331,12 @@ router.delete('/danger/order/:id', requireDangerPw, (req, res) => {
   res.json({ ok: true, deleted: 'order', id: req.params.id });
 });
 
-/**
- * DELETE /api/admin/danger/payment/:id
- * Löscht einen einzelnen Zahlungseingang + setzt zugehörige Bestellung zurück (unpaid).
- */
 router.delete('/danger/payment/:id', requireDangerPw, (req, res) => {
   const db      = getDb();
   const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(req.params.id);
   if (!payment) return res.status(404).json({ error: 'Zahlung nicht gefunden' });
 
   db.transaction(() => {
-    // Wenn die Zahlung zugeordnet war, Bestellung als unbezahlt markieren
     if (payment.matched && payment.person_id) {
       db.prepare(
         'UPDATE orders SET paid = 0, paid_at = NULL WHERE person_id = ? AND paid = 1'
@@ -357,10 +348,6 @@ router.delete('/danger/payment/:id', requireDangerPw, (req, res) => {
   res.json({ ok: true, deleted: 'payment', id: req.params.id });
 });
 
-/**
- * DELETE /api/admin/danger/all
- * Löscht ALLE Daten (persons, orders, order_tickets, payments). Nuclear option.
- */
 router.delete('/danger/all', requireDangerPw, (req, res) => {
   const db = getDb();
 

@@ -124,11 +124,10 @@ async function loadPersons() {
 
 function renderPersons(persons) {
   const tbody = document.getElementById('personsTbody');
-  if (!persons.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted)">Keine Personen vorhanden.</td></tr>'; return; }
+  if (!persons.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">Keine Personen vorhanden.</td></tr>'; return; }
   tbody.innerHTML = persons.map(p => `
     <tr>
       <td><strong>${esc(p.name)}</strong></td>
-      <td>${esc(p.email||'–')}</td>
       <td><code>${esc(p.code)}</code></td>
       <td>${p.num_tickets}</td>
       <td>${p.has_order?'<span class="badge badge-warning">Ja</span>':'<span class="badge badge-muted">Nein</span>'}</td>
@@ -146,6 +145,7 @@ window.deletePerson = async function(id) {
 };
 
 // ── Generate codes ─────────────────────────────────────────────────────────
+// Format: Name; Anzahl Tickets  (no email – ticket holders enter their own)
 function setupGenerateCodes() {
   document.getElementById('generateBtn')?.addEventListener('click', async () => {
     clearAlert('genAlert');
@@ -153,7 +153,7 @@ function setupGenerateCodes() {
     if (!raw) { showAlert('genAlert', 'Bitte Personen eingeben.', 'warning'); return; }
     const persons = raw.split('\n').map(l => l.trim()).filter(Boolean).map(line => {
       const parts = line.split(';').map(s => s.trim());
-      return { name: parts[0]||'Unbekannt', email: parts[1]||'', numTickets: parseInt(parts[2],10)||1 };
+      return { name: parts[0] || 'Unbekannt', numTickets: parseInt(parts[1], 10) || 1 };
     });
     setBtn('generateBtn', true, '<span class="spinner"></span> Generiere…');
     try {
@@ -189,12 +189,16 @@ function renderOrders(orders) {
   const tbody = document.getElementById('ordersTbody');
   if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted)">Keine Bestellungen vorhanden.</td></tr>'; return; }
   tbody.innerHTML = filtered.map(o => {
-    const ticketNames = (o.tickets||[]).map(t=>esc(t.ticket_name)).join(', ')||'–';
+    // extra_info column now stores ticket e-mail; ticket_name stores the name
+    const ticketSummary = (o.tickets||[]).map(t => {
+      const nm = esc(t.ticket_name);
+      const em = t.extra_info ? ` &lt;${esc(t.extra_info)}&gt;` : '';
+      return nm + em;
+    }).join(', ') || '–';
     return `<tr>
       <td><strong>${esc(o.person_name)}</strong></td>
-      <td style="font-size:.82rem">${esc(o.person_email||'–')}</td>
       <td><code>${esc(o.person_code)}</code></td>
-      <td title="${ticketNames.replace(/"/g,'&quot;')}" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.ticket_count} (${ticketNames})</td>
+      <td title="${ticketSummary}" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.ticket_count} (${ticketSummary})</td>
       <td>${fmt(o.total_eur)}</td>
       <td>${o.paid?`<span class="badge badge-success">✓ Bezahlt</span><br><span style="font-size:.75rem;color:var(--muted)">${esc(o.paid_at?.slice(0,16)||'')}</span>`:'<span class="badge badge-warning">Ausstehend</span>'}</td>
       <td style="font-size:.82rem;color:var(--muted)">${esc(o.created_at?.slice(0,16)||'')}</td>

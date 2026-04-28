@@ -4,6 +4,8 @@
  * GET  /api/tickets/config           – Ticket-Preis und Veranstaltungsinfos
  * POST /api/tickets/order            – Bestellung speichern + EPC-QR erzeugen
  * GET  /api/tickets/order/:personId  – Bestellung laden
+ *
+ * Each ticket now only requires: ticketName + ticketEmail (no class field).
  */
 const express = require('express');
 const router  = express.Router();
@@ -28,9 +30,20 @@ router.get('/config', (req, res) => {
 // ── POST /api/tickets/order ──────────────────────────────────────────────────
 router.post('/order', async (req, res) => {
   const { personId, tickets } = req.body;
-  // tickets: [{ ticketName, ticketClass, extraInfo }]
+  // tickets: [{ ticketName, ticketEmail }]
   if (!personId || !Array.isArray(tickets) || tickets.length === 0) {
     return res.status(400).json({ error: 'personId und tickets erforderlich' });
+  }
+
+  // Basic e-mail validation
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  for (const t of tickets) {
+    if (!t.ticketName || !t.ticketName.trim()) {
+      return res.status(400).json({ error: 'Jedes Ticket benötigt einen Namen.' });
+    }
+    if (!t.ticketEmail || !emailRe.test(t.ticketEmail.trim())) {
+      return res.status(400).json({ error: 'Jedes Ticket benötigt eine gültige E-Mail-Adresse.' });
+    }
   }
 
   const db = getDb();
@@ -45,7 +58,6 @@ router.post('/order', async (req, res) => {
   const person = db.prepare('SELECT * FROM persons WHERE id = ?').get(personId);
   if (!person) return res.status(404).json({ error: 'Person nicht gefunden' });
 
-  // Anzahl prüfen
   if (tickets.length > person.num_tickets) {
     return res.status(400).json({
       error: `Zu viele Tickets. Maximal ${person.num_tickets} erlaubt.`
@@ -66,6 +78,7 @@ router.post('/order', async (req, res) => {
   const epcQr = await generateQrDataUrl(epcPayload);
 
   // Bestellung speichern
+  // ticket_class is kept in schema for backwards compat but always empty now
   const insertOrder = db.prepare(
     'INSERT INTO orders (person_id, submitted, total_eur, epc_blob) VALUES (?, 1, ?, ?)'
   );
@@ -74,10 +87,11 @@ router.post('/order', async (req, res) => {
   );
 
   const saveOrder = db.transaction(() => {
-    const result = insertOrder.run(personId, totalEur, epcPayload);
+    const result  = insertOrder.run(personId, totalEur, epcPayload);
     const orderId = result.lastInsertRowid;
     tickets.forEach(t =>
-      insertTicket.run(orderId, t.ticketName || '', t.ticketClass || '', t.extraInfo || '')
+      insertTicket.run(orderId, t.ticketName.trim(), '', t.ticketEmail.trim())
+      // extra_info column reused for e-mail; ticket_class intentionally left empty
     );
     return orderId;
   });
