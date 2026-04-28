@@ -83,9 +83,7 @@ function initSchema(db) {
     );
   `);
 
-  // ── Migrationen: neue Spalten nachrüsten
-  // SQLite erlaubt kein ALTER TABLE ADD COLUMN mit UNIQUE-Constraint.
-  // UNIQUE wird stattdessen als separater Index angelegt.
+  // ── Migrations: neue Spalten nachrüsten
   const columnMigrations = [
     { table: 'orders',        col: 'split_payment',    sql: 'ALTER TABLE orders ADD COLUMN split_payment INTEGER NOT NULL DEFAULT 0' },
     { table: 'order_tickets', col: 'split_ref',        sql: 'ALTER TABLE order_tickets ADD COLUMN split_ref TEXT' },
@@ -93,7 +91,7 @@ function initSchema(db) {
     { table: 'order_tickets', col: 'split_epc_blob',   sql: 'ALTER TABLE order_tickets ADD COLUMN split_epc_blob TEXT' },
     { table: 'order_tickets', col: 'split_paid_at',    sql: 'ALTER TABLE order_tickets ADD COLUMN split_paid_at TEXT' },
     { table: 'order_tickets', col: 'split_amount',     sql: 'ALTER TABLE order_tickets ADD COLUMN split_amount REAL' },
-    // qr_token: kein UNIQUE hier, Index separat unten
+    // qr_token ohne UNIQUE (SQLite-Limitierung), Index separat
     { table: 'order_tickets', col: 'qr_token',     sql: 'ALTER TABLE order_tickets ADD COLUMN qr_token TEXT' },
     { table: 'order_tickets', col: 'qr_issued_at', sql: 'ALTER TABLE order_tickets ADD COLUMN qr_issued_at TEXT' },
   ];
@@ -107,10 +105,33 @@ function initSchema(db) {
     } catch { /* Spalte existiert bereits */ }
   }
 
-  // UNIQUE-Index für qr_token (separater Schritt, kompatibel mit SQLite)
+  // UNIQUE-Index für qr_token
   try {
     db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_order_tickets_qr_token ON order_tickets (qr_token) WHERE qr_token IS NOT NULL');
-  } catch { /* Index existiert bereits */ }
+  } catch { /* bereits vorhanden */ }
+
+  // ── Settings aus Env-Vars seeden (nur wenn der Key noch NICHT in der DB steht)
+  // Werte die bereits manuell in der Admin-UI gespeichert wurden, werden NICHT überschrieben.
+  const envDefaults = [
+    { key: 'bank_iban',      env: 'BANK_IBAN' },
+    { key: 'bank_bic',       env: 'BANK_BIC' },
+    { key: 'bank_name',      env: 'BANK_NAME' },
+    { key: 'ticket_price',   env: 'TICKET_PRICE' },
+    { key: 'event_name',     env: 'EVENT_NAME' },
+    { key: 'event_date',     env: 'EVENT_DATE' },
+    { key: 'event_location', env: 'EVENT_LOCATION' },
+  ];
+
+  const insertIfMissing = db.prepare(
+    'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)'
+  );
+
+  for (const { key, env } of envDefaults) {
+    const val = process.env[env];
+    if (val !== undefined && val !== '') {
+      insertIfMissing.run(key, val);
+    }
+  }
 }
 
 function getSettings() {
