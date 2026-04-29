@@ -148,4 +148,8 @@ function setSetting(key, value) {
   ).run(key, String(value));
 }
 
-module.exports = { getDb, getSettings, setSetting };
+function nowBerlin() {
+  return new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
+}
+
+module.exports = { getDb, getSettings, setSetting, nowBerlin };
