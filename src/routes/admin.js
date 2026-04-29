@@ -10,7 +10,7 @@ const path     = require('path');
 const ExcelJS  = require('exceljs');
 const bcrypt   = require('bcrypt');
 const { createObjectCsvStringifier } = require('csv-writer');
-const { getDb, getSettings }         = require('../database');
+const { getDb, getSettings, nowBerlin }         = require('../database');
 const { generateUniqueCodes }        = require('../utils/codeGenerator');
 const { parseBankPdf }               = require('../utils/pdfParser');
 const { generateQrBufferForTicket }  = require('../utils/qrGenerator');
@@ -106,9 +106,9 @@ router.post('/generate-codes', (req, res) => {
   const db = getDb();
   const existing = new Set(db.prepare('SELECT code FROM persons').all().map(r => r.code));
   const codes    = generateUniqueCodes(persons.length, existing);
-  const insert   = db.prepare('INSERT INTO persons (name, email, code, num_tickets) VALUES (@name, @email, @code, @numTickets)');
+  const insert   = db.prepare('INSERT INTO persons (name, email, code, num_tickets, created_at) VALUES (@name, @email, @code, @numTickets, @createdAt)');
   try {
-    db.transaction(list => list.map((p, i) => insert.run({ name: p.name || 'Unbekannt', email: '', code: codes[i], numTickets: p.numTickets || 1 })))(persons);
+    db.transaction(list => list.map((p, i) => insert.run({ name: p.name || 'Unbekannt', email: '', code: codes[i], numTickets: p.numTickets || 1, createdAt: nowBerlin() })))(persons);
     res.json({ created: db.prepare('SELECT * FROM persons ORDER BY id DESC LIMIT ?').all(persons.length).reverse() });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
