@@ -26,7 +26,7 @@ function getDb() {
       email       TEXT    NOT NULL DEFAULT '',
       code        TEXT    NOT NULL UNIQUE,
       num_tickets INTEGER NOT NULL DEFAULT 1,
-      created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
     );
 
     CREATE TABLE IF NOT EXISTS orders (
@@ -38,7 +38,7 @@ function getDb() {
       paid_at     TEXT,
       total_eur   REAL    NOT NULL DEFAULT 0,
       epc_blob    TEXT,
-      created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
     );
 
     CREATE TABLE IF NOT EXISTS order_tickets (
@@ -47,7 +47,7 @@ function getDb() {
       ticket_name  TEXT    NOT NULL,
       ticket_email TEXT    NOT NULL DEFAULT '',
       extra_info   TEXT,
-      created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+      created_at   TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
     );
 
     CREATE TABLE IF NOT EXISTS payments (
@@ -59,7 +59,7 @@ function getDb() {
       booking_date TEXT,
       matched      INTEGER NOT NULL DEFAULT 0,
       qr_sent      INTEGER NOT NULL DEFAULT 0,
-      created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+      created_at   TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
       UNIQUE(booking_date, reference, amount_eur)
     );
 
