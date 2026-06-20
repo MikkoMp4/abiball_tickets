@@ -68,6 +68,22 @@ function getDb() {
       value TEXT NOT NULL DEFAULT ''
     );
   `);
+   // ── QR-Scanner: Scan-Protokoll ─────────────────────────────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ticket_scans (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      ticket_id   INTEGER NOT NULL REFERENCES order_tickets(id) ON DELETE CASCADE,
+      order_id    INTEGER NOT NULL,
+      ticket_name TEXT    NOT NULL,
+      person_name TEXT,
+      person_code TEXT,
+      scan_number INTEGER NOT NULL,
+      was_paid    INTEGER NOT NULL,
+      scanned_at  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_ticket_scans_ticket_id  ON ticket_scans (ticket_id);
+    CREATE INDEX IF NOT EXISTS idx_ticket_scans_scanned_at ON ticket_scans (scanned_at);
+  `);
 
   function hasColumn(table, column) {
     return db.prepare(`PRAGMA table_info(${table})`).all().some(r => r.name === column);

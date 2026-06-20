@@ -1,0 +1,271 @@
+/* =========================================================
+   Abiball – Scanner-Seite
+   ========================================================= */
+
+/* ── Grundlayout ─────────────────────────────────────────── */
+.scan-body {
+  margin: 0;
+  overflow: hidden;
+  background: #000;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.scanner-stage {
+  position: fixed;
+  inset: 0;
+}
+
+/* ── Login-Overlay ───────────────────────────────────────── */
+#loginOverlay {
+  position: fixed; inset: 0;
+  background: rgba(10, 10, 20, 0.92);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: none; /* wird per JS auf flex gesetzt */
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 1rem;
+}
+#loginOverlay .login-box {
+  background: #fff;
+  border-radius: 16px;
+  padding: 2.5rem 2rem;
+  width: 100%;
+  max-width: 360px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+#loginOverlay .login-icon { font-size: 2.5rem; margin-bottom: .5rem; }
+#loginOverlay h2 { margin-bottom: .25rem; font-size: 1.3rem; color: #1a1209; }
+#loginOverlay p  { color: #666; font-size: .9rem; margin-bottom: 1.5rem; }
+#loginOverlay input[type=password] {
+  width: 100%;
+  padding: .75rem 1rem;
+  font-size: 1.1rem;
+  letter-spacing: .2em;
+  border: 1.5px solid #ddd;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  text-align: center;
+  outline: none;
+  transition: border-color .2s;
+  box-sizing: border-box;
+}
+#loginOverlay input[type=password]:focus { border-color: #e67e22; }
+#loginOverlay .btn-login {
+  width: 100%;
+  padding: .75rem;
+  background: #e67e22;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .2s;
+}
+#loginOverlay .btn-login:hover    { background: #d35400; }
+#loginOverlay .btn-login:disabled { opacity: .6; cursor: not-allowed; }
+#loginError {
+  color: #dc2626;
+  font-size: .875rem;
+  min-height: 1.25rem;
+  margin-bottom: .5rem;
+}
+
+/* ── Canvas: Hintergrund (blur) + Viewfinder ─────────────── */
+.bg-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  filter: blur(16px) brightness(.65);
+}
+
+.vf-canvas {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: min(72vw, 300px);
+  height: min(72vw, 300px);
+  transform: translate(-50%, -50%);
+  border-radius: 28px;
+  border: 3px solid rgba(255, 255, 255, .85);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, .5);
+}
+
+/* ── Scan-Hinweis ────────────────────────────────────────── */
+.scan-hint {
+  position: absolute;
+  left: 50%;
+  top: calc(42% + min(36vw, 150px) + 24px);
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, .85);
+  font-size: .9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .5);
+}
+
+/* ── Ergebnis-Overlay ────────────────────────────────────── */
+.result-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .75rem;
+  text-align: center;
+  padding: 2rem;
+  z-index: 50;
+  cursor: pointer;
+}
+.result-green  { background: #4caf50; }
+.result-yellow { background: #f5b301; }
+.result-red    { background: #e53935; }
+
+.result-icon {
+  font-size: 5rem;
+  line-height: 1;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,.3));
+}
+
+.result-box {
+  background: rgba(0, 0, 0, .22);
+  border-radius: 20px;
+  padding: 1.75rem 2rem;
+  color: #fff;
+  max-width: 340px;
+  width: 100%;
+}
+.result-status {
+  font-size: 1.3rem;
+  font-weight: 800;
+  margin-bottom: .5rem;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.result-name {
+  font-size: 2.1rem;
+  font-weight: 800;
+  line-height: 1.1;
+  word-break: break-word;
+}
+.result-meta {
+  font-size: 1.1rem;
+  opacity: .9;
+  margin-top: .4rem;
+}
+.result-tap-hint {
+  font-size: .85rem;
+  opacity: .7;
+  margin-top: 1.25rem;
+  font-style: italic;
+}
+
+/* ── Pille (letzte Scans) ────────────────────────────────── */
+.scan-pill {
+  position: absolute;
+  left: 50%;
+  bottom: env(safe-area-inset-bottom, 24px);
+  transform: translateX(-50%);
+  background: rgba(20, 20, 20, .75);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, .25);
+  border-radius: 999px;
+  padding: .7rem 1.3rem;
+  font-size: .9rem;
+  font-weight: 600;
+  max-width: 90vw;
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  transition: background .18s;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.scan-pill:hover { background: rgba(40, 40, 40, .85); }
+.pill-sep { opacity: .45; margin: 0 .15rem; }
+
+/* ── History-Modal ───────────────────────────────────────── */
+.history-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .5);
+  display: flex;
+  align-items: flex-end;
+  z-index: 60;
+}
+.history-sheet {
+  background: #fff;
+  width: 100%;
+  max-height: 75vh;
+  border-radius: 20px 20px 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #eee;
+  font-weight: 700;
+  font-size: 1rem;
+  color: #1a1209;
+  flex-shrink: 0;
+}
+.history-header button {
+  font-size: 1.3rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: .2rem .4rem;
+  border-radius: 6px;
+  color: #666;
+  line-height: 1;
+}
+.history-header button:hover { background: #f5f5f5; }
+.history-list {
+  overflow-y: auto;
+  padding: .25rem 1rem;
+  -webkit-overflow-scrolling: touch;
+}
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .65rem 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+.history-row:last-child { border-bottom: none; }
+.history-icon { font-size: 1.5rem; flex-shrink: 0; }
+.history-info { flex: 1; min-width: 0; }
+.history-info strong {
+  display: block;
+  font-size: .9rem;
+  color: #1a1209;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.history-info span { font-size: .78rem; color: #888; }
+.history-time {
+  font-size: .78rem;
+  color: #aaa;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.history-empty {
+  text-align: center;
+  color: #aaa;
+  font-size: .9rem;
+  padding: 2rem 1rem;
+}

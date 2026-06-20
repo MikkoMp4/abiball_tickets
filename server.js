@@ -63,6 +63,7 @@ app.use('/api/auth', loginLimiter, require('./src/routes/auth'));
 
 // API-Routen
 app.use('/api/admin/settings', adminAuth, apiLimiter, require('./src/routes/settings'));
+app.use('/api/admin/scan',     adminAuth, apiLimiter, require('./src/routes/scan'));
 app.use('/api/admin',          adminAuth, apiLimiter, require('./src/routes/admin'));
 app.use('/api/codes',          verifyLimiter, require('./src/routes/codes'));
 app.use('/api/tickets',        apiLimiter, require('./src/routes/tickets'));

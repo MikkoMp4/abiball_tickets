@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>Abiball – Scanner</title>
+  <link rel="stylesheet" href="/css/scan.css">
+</head>
+<body class="scan-body">
+
+  <!-- ── Login-Overlay (gleiche Logik wie admin.html) ────────────── -->
+  <div id="loginOverlay">
+    <div class="login-box">
+      <div class="login-icon">📷</div>
+      <h2>Einlass-Scanner</h2>
+      <p>Bitte Admin-Passwort eingeben</p>
+      <div id="loginError"></div>
+      <input
+        type="password"
+        id="loginInput"
+        placeholder="••••••••••"
+        maxlength="64"
+        autocomplete="current-password"
+        autofocus
+      >
+      <button class="btn-login" id="loginBtn">Einloggen</button>
+    </div>
+  </div>
+
+  <!-- ── Scanner-Bühne (nach Login sichtbar) ─────────────────────── -->
+  <div id="scannerStage" class="scanner-stage" style="display:none">
+
+    <!-- Hintergrund-Canvas: Vollbild, mit blur -->
+    <canvas id="bgCanvas" class="bg-canvas"></canvas>
+
+    <!-- Viewfinder-Canvas: Scan-Zielbereich, scharf -->
+    <canvas id="vfCanvas" class="vf-canvas"></canvas>
+
+    <!-- Video-Element, nur für Stream (nicht sichtbar) -->
+    <video id="rawVideo" playsinline muted style="display:none"></video>
+
+    <!-- Hinweis-Text unter dem Viewfinder -->
+    <div class="scan-hint">QR-Code im Rahmen positionieren</div>
+
+    <!-- Pille mit den letzten 2 Scans (Tippen = Verlauf) -->
+    <button id="scanPill" class="scan-pill">
+      <span id="pillContent" class="pill-content">Noch keine Scans</span>
+    </button>
+
+  </div>
+
+  <!-- ── Ergebnis-Overlay (Vollbild-Farbe nach Scan) ─────────────── -->
+  <div id="resultOverlay" class="result-overlay" style="display:none">
+    <div class="result-icon" id="resultIcon"></div>
+    <div class="result-box" id="resultBox">
+      <div class="result-status" id="resultStatus"></div>
+      <div class="result-name"   id="resultName"></div>
+      <div class="result-meta"   id="resultMeta"></div>
+      <div class="result-tap-hint">Antippen zum Weiterscannen</div>
+    </div>
+  </div>
+
+  <!-- ── Verlauf-Modal (Bottom-Sheet) ────────────────────────────── -->
+  <div id="historyModal" class="history-modal" style="display:none">
+    <div class="history-sheet">
+      <div class="history-header">
+        <span>Scan-Verlauf</span>
+        <button id="closeHistoryBtn" title="Schließen">✕</button>
+      </div>
+      <div id="historyList" class="history-list"></div>
+    </div>
+  </div>
+
+  <!-- jsQR lokal eingebunden (kein CDN-Abhängigkeit beim Einlass) -->
+  <script src="/js/vendor/jsQR.js"></script>
+  <script src="/js/scan.js"></script>
+</body>
+</html>
