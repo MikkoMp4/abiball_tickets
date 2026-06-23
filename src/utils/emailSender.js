@@ -169,7 +169,7 @@ Das Orga-Team`;
         <!-- Header -->
         <tr>
           <td style="background:#1a1a2e;padding:32px 40px;text-align:center;">
-            <!-- ── LOGO SLOT ──────────────────────────────────────────────────
+            ── LOGO SLOT ──────────────────────────────────────────────────
                  Bild-URL oder base64-String eintragen, dann den img-Tag
                  einkommentieren (<!-- entfernen).
                  Empfohlen: PNG/SVG mit transparentem Hintergrund, max. 200 px breit.
@@ -177,7 +177,7 @@ Das Orga-Team`;
                  alt="Abi-Logo"
                  width="160"
                  style="display:block;margin:0 auto 20px;max-width:160px;height:auto;">
-            ── LOGO SLOT ENDE ──────────────────────────────────────────────── -->
+            ── LOGO SLOT ENDE ──────────────────────────────────────────────── 
             <p style="margin:0 0 4px;color:#a0a8c8;font-size:13px;letter-spacing:2px;text-transform:uppercase;">26. Juni 2025</p>
             <h1 style="margin:0;color:#ffffff;font-size:28px;font-weight:700;letter-spacing:1px;">Abiball 2025</h1>
             <p style="margin:8px 0 0;color:#c8cfe8;font-size:15px;">Alle Infos auf einen Blick</p>
