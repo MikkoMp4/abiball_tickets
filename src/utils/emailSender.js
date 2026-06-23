@@ -120,18 +120,165 @@ async function sendFollowUpEmail({ to, personName, qrBuffer }) {
   const hasQr = !!qrBuffer;
 
   // ── Betreff ────────────────────────────────────────────────────────────────
-  const subject = ''; // TODO: Betreff hier eintragen
+  const subject = 'Abiball 26.06 – Alle Infos auf einen Blick';
 
   // ── Plaintext-Version ──────────────────────────────────────────────────────
-  const textBody = `Hallo ${personName},\n\n` +
-    // TODO: Text hier eintragen
-    `\n\nDas Orga-Team`;
+  const textBody =
+`Hallo ${personName},
+
+der Freitag rückt näher! Hier kommen alle wichtigen Informationen zum Abiball am 26.06.2025 auf einen Blick.
+
+ABLAUF DES ABENDS
+─────────────────
+  17:00 Uhr  Einlass
+  17:30 Uhr  Beginn des Programms
+  19:00 Uhr  Hauptspeise
+  22:00 Uhr  Ende des offiziellen Teils
+
+Bitte erscheint möglichst pünktlich, da das Programm um 17:30 Uhr startet.
+Die Vorspeise steht bereits auf den Tischen – ihr müsst also nicht lange warten.
+
+AFTERPARTY
+──────────
+Informationen zu den Afterparty-Tickets für alle Abiturienten werden heute
+im Abichat geteilt. Tickets für Freunde und Begleitung sind an der Abendkasse
+oder in den kommenden Tagen erhältlich – zunächst jedoch ausschließlich für
+die Stufe.
+
+Weitere Formalitäten und Infos folgen in Kürze.
+
+FRAGEN?
+───────
+Bei Fragen oder Anliegen meldet euch gerne jederzeit:
+mikko@vorhanden.de
+
+Wir freuen uns auf einen unvergesslichen Abend mit euch!
+
+Mit besten Grüßen
+Das Orga-Team`;
 
   // ── HTML-Version ───────────────────────────────────────────────────────────
-  const htmlBody =
-    `<p>Hallo <strong>${name}</strong>,</p>` +
-    // TODO: HTML hier eintragen
-    `<p><em>Das Orga-Team</em></p>`;
+  const htmlBody = `<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:#1a1a2e;padding:32px 40px;text-align:center;">
+            <p style="margin:0 0 4px;color:#a0a8c8;font-size:13px;letter-spacing:2px;text-transform:uppercase;">26. Juni 2025</p>
+            <h1 style="margin:0;color:#ffffff;font-size:28px;font-weight:700;letter-spacing:1px;">Abiball 2025</h1>
+            <p style="margin:8px 0 0;color:#c8cfe8;font-size:15px;">Alle Infos auf einen Blick</p>
+          </td>
+        </tr>
+
+        <!-- Greeting -->
+        <tr>
+          <td style="padding:36px 40px 8px;">
+            <p style="margin:0;color:#333333;font-size:16px;line-height:1.6;">
+              Hallo <strong>${name}</strong>,
+            </p>
+            <p style="margin:12px 0 0;color:#555555;font-size:15px;line-height:1.7;">
+              der Freitag rückt näher! Hier kommen alle wichtigen Informationen
+              zum Abiball auf einen Blick.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Schedule -->
+        <tr>
+          <td style="padding:28px 40px 8px;">
+            <h2 style="margin:0 0 16px;color:#1a1a2e;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;border-bottom:2px solid #e8e8f0;padding-bottom:10px;">
+              Ablauf des Abends
+            </h2>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="padding:8px 16px 8px 0;color:#1a1a2e;font-weight:700;font-size:15px;white-space:nowrap;vertical-align:top;">17:00 Uhr</td>
+                <td style="padding:8px 0;color:#444444;font-size:15px;vertical-align:top;">Einlass</td>
+              </tr>
+              <tr style="background:#f8f8fc;">
+                <td style="padding:8px 16px 8px 0;color:#1a1a2e;font-weight:700;font-size:15px;white-space:nowrap;vertical-align:top;">17:30 Uhr</td>
+                <td style="padding:8px 0;color:#444444;font-size:15px;vertical-align:top;">Beginn des Programms</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 16px 8px 0;color:#1a1a2e;font-weight:700;font-size:15px;white-space:nowrap;vertical-align:top;">19:00 Uhr</td>
+                <td style="padding:8px 0;color:#444444;font-size:15px;vertical-align:top;">Hauptspeise</td>
+              </tr>
+              <tr style="background:#f8f8fc;">
+                <td style="padding:8px 16px 8px 0;color:#1a1a2e;font-weight:700;font-size:15px;white-space:nowrap;vertical-align:top;">22:00 Uhr</td>
+                <td style="padding:8px 0;color:#444444;font-size:15px;vertical-align:top;">Ende des offiziellen Teils</td>
+              </tr>
+            </table>
+            <p style="margin:16px 0 0;color:#666666;font-size:14px;line-height:1.6;font-style:italic;">
+              Bitte erscheint möglichst pünktlich, da das Programm um 17:30 Uhr startet.
+              Die Vorspeise steht bereits auf den Tischen – ihr müsst also nicht lange warten.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Afterparty -->
+        <tr>
+          <td style="padding:28px 40px 8px;">
+            <h2 style="margin:0 0 16px;color:#1a1a2e;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;border-bottom:2px solid #e8e8f0;padding-bottom:10px;">
+              Afterparty
+            </h2>
+            <p style="margin:0;color:#555555;font-size:15px;line-height:1.7;">
+              Informationen zu den Afterparty-Tickets für alle Abiturienten werden <strong>heute im Abichat</strong> geteilt.
+              Tickets für Freunde und Begleitung sind an der <strong>Abendkasse</strong> oder in den
+              kommenden Tagen erhältlich – zunächst jedoch ausschließlich für die Stufe.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Further info -->
+        <tr>
+          <td style="padding:28px 40px 8px;">
+            <h2 style="margin:0 0 16px;color:#1a1a2e;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;border-bottom:2px solid #e8e8f0;padding-bottom:10px;">
+              Weitere Infos
+            </h2>
+            <p style="margin:0;color:#555555;font-size:15px;line-height:1.7;">
+              Weitere Formalitäten und Details folgen in Kürze. Bei Fragen oder Anliegen
+              meldet euch jederzeit gerne bei uns:
+            </p>
+            <p style="margin:12px 0 0;">
+              <a href="mailto:mikko@vorhanden.de"
+                 style="color:#1a1a2e;font-weight:700;font-size:15px;text-decoration:none;border-bottom:1px solid #1a1a2e;">
+                mikko@vorhanden.de
+              </a>
+            </p>
+          </td>
+        </tr>
+
+        <!-- Sign-off -->
+        <tr>
+          <td style="padding:28px 40px 36px;">
+            <p style="margin:0;color:#555555;font-size:15px;line-height:1.7;">
+              Wir freuen uns auf einen unvergesslichen Abend mit euch!
+            </p>
+            <p style="margin:16px 0 0;color:#333333;font-size:15px;">
+              Mit besten Grüßen<br>
+              <strong>Das Orga-Team</strong>
+            </p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background:#f0f0f6;padding:20px 40px;text-align:center;">
+            <p style="margin:0;color:#999999;font-size:12px;line-height:1.6;">
+              Diese E-Mail wurde automatisch versandt. · Bei Fragen: <a href="mailto:mikko@vorhanden.de" style="color:#999999;">mikko@vorhanden.de</a>
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
 
   await transport.sendMail({
     from:        process.env.MAIL_FROM || '"no-reply Abiball Tickets" <tickets@example.com>',
