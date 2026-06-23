@@ -169,7 +169,7 @@ Das Orga-Team`;
         <!-- Header -->
         <tr>
           <td style="background:#1a1a2e;padding:32px 40px;text-align:center;">
-            <img src="../LOGO.png"
+            <img src="./LOGO.png"
                  alt="Abi-Logo"
                  width="160"
                  style="display:block;margin:0 auto 20px;max-width:160px;height:auto;">
