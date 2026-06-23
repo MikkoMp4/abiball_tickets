@@ -540,25 +540,9 @@ router.delete('/danger/all', requireDangerPw, (req, res) => {
   res.json({ ok: true, deleted: 'all' });
 });
 
-// ── GET /api/admin/ticket-list ────────────────────────────────────────────────
-// Gibt alle bezahlten Tickets mit E-Mail in Versandreihenfolge zurück.
-router.get('/ticket-list', (req, res) => {
-  const db = getDb();
-  const tickets = db.prepare(`
-    SELECT ot.id, ot.ticket_name, ot.ticket_email, ot.order_id
-    FROM order_tickets ot
-    JOIN orders  o ON o.id = ot.order_id
-    JOIN persons p ON p.id = o.person_id
-    WHERE ot.ticket_paid = 1
-      AND trim(coalesce(ot.ticket_email, '')) != ''
-    ORDER BY ot.id
-  `).all();
-  res.json({ tickets, total: tickets.length });
-});
-
 // ── POST /api/admin/send-all-tickets ──────────────────────────────────────────
 router.post('/send-all-tickets', async (req, res) => {
-  const { testEmail, attachQr = true, skipIds = [] } = req.body;
+  const { testEmail, attachQr = true } = req.body;
 
   // SSE headers — X-Accel-Buffering: no prevents Caddy from buffering the stream
   res.setHeader('Content-Type', 'text/event-stream');
@@ -612,32 +596,24 @@ router.post('/send-all-tickets', async (req, res) => {
     }
 
     // ── REAL MODE — all paid tickets with a non-empty email ───────────────────
-    const allTickets = db.prepare(`
+    const tickets = db.prepare(`
       SELECT ot.*, p.code AS person_code
       FROM order_tickets ot
       JOIN orders  o ON o.id = ot.order_id
       JOIN persons p ON p.id = o.person_id
       WHERE ot.ticket_paid = 1
         AND trim(coalesce(ot.ticket_email, '')) != ''
-      ORDER BY ot.id
     `).all();
-
-    // Bereits gesendete Tickets überspringen (skipIds vom Frontend)
-    const skipSet = new Set((skipIds || []).map(Number));
-    const tickets = allTickets.filter(t => !skipSet.has(t.id));
-    const skipped = allTickets.length - tickets.length;
 
     const total = tickets.length;
 
     if (total === 0) {
-      emit({ error: skipped > 0
-        ? `Alle ${skipped} Tickets wurden als bereits gesendet markiert – nichts zu tun.`
-        : 'Keine bezahlten Tickets mit E-Mail-Adresse gefunden.' });
-      emit({ done: true, sent: 0, failed: 0, total: 0, skipped });
+      emit({ error: 'Keine bezahlten Tickets mit E-Mail-Adresse gefunden.' });
+      emit({ done: true, sent: 0, failed: 0, total: 0 });
       return res.end();
     }
 
-    emit({ total, sent: 0, skipped });
+    emit({ total, sent: 0 });
 
     let sent = 0;
     let failed = 0;

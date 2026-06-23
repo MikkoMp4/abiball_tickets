@@ -175,104 +175,13 @@
     </div>
 
     <!-- ── E-Mail-Massenversand ──────────────────────────────────────────────── -->
-    <!-- ── E-Mail-Massenversand ──────────────────────────────────────────────── -->
     <div class="card">
       <h2>📧 Tickets per E-Mail versenden</h2>
       <div id="emailSendAlert"></div>
       <p style="font-size:.9rem;color:var(--muted);margin-bottom:1rem">
         Sendet QR-Code-Tickets an alle Personen mit bezahlten Tickets.
-        Lade zuerst die Empfängerliste und hake bereits gesendete Mails ab.
+        Bereits versendete Tickets werden erneut gesendet.
       </p>
-
-      <!-- Test row -->
-      <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:1rem">
-        <div class="form-group" style="margin-bottom:0;flex:1;min-width:200px">
-          <label for="testEmailInput">Test-E-Mail-Adresse</label>
-          <input type="email" id="testEmailInput" placeholder="meine@email.de" autocomplete="email">
-        </div>
-        <button class="btn btn-outline-dark" id="testEmailBtn" style="white-space:nowrap">
-          📬 Test senden
-        </button>
-      </div>
-
-      <!-- QR attach toggle -->
-      <label style="display:inline-flex;align-items:center;gap:.5rem;
-                    margin-bottom:1.25rem;font-size:.9rem;cursor:pointer;user-select:none">
-        <input type="checkbox" id="attachQrCheck" checked
-               style="width:1rem;height:1rem;accent-color:var(--primary);cursor:pointer">
-        <span>QR-Code-Ticket als Anhang mitsenden</span>
-      </label>
-
-      <!-- Schritt 1: Empfängerliste laden -->
-      <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;margin-bottom:.75rem">
-        <button class="btn btn-outline-dark" id="loadPreviewBtn">📋 Empfängerliste laden</button>
-        <span id="previewStatus" style="font-size:.85rem;color:var(--muted)"></span>
-      </div>
-
-      <!-- Schritt 2: Checkliste (erst nach dem Laden sichtbar) -->
-      <div id="bulkPreviewPanel"
-           style="display:none;margin-bottom:1.25rem;border:1px solid var(--border);
-                  border-radius:var(--radius);overflow:hidden">
-
-        <!-- Toolbar -->
-        <div style="padding:.5rem .75rem;background:#f5f5f5;border-bottom:1px solid var(--border);
-                    display:flex;justify-content:space-between;align-items:center;
-                    flex-wrap:wrap;gap:.4rem">
-          <span id="previewCountLabel" style="font-weight:600;font-size:.85rem"></span>
-          <div style="display:flex;gap:.3rem;align-items:center;flex-wrap:wrap">
-            <span style="font-size:.8rem;color:var(--muted)">Senden ab&nbsp;#</span>
-            <input type="number" id="skipFromInput" min="1" placeholder="83"
-                   style="width:60px;padding:.2rem .4rem;border:1px solid var(--border);
-                          border-radius:5px;font-size:.85rem">
-            <button class="btn btn-outline-dark" style="padding:.2rem .6rem;font-size:.8rem"
-                    onclick="applySkipFrom()">✓</button>
-            <button class="btn btn-outline-dark" style="padding:.2rem .6rem;font-size:.8rem"
-                    onclick="selectAllRecipients(true)">☑ Alle</button>
-            <button class="btn btn-outline-dark" style="padding:.2rem .6rem;font-size:.8rem"
-                    onclick="selectAllRecipients(false)">☐ Keine</button>
-          </div>
-        </div>
-
-        <!-- Scrollbare Empfängerliste -->
-        <div id="bulkPreviewList"
-             style="max-height:260px;overflow-y:auto;background:#fff;font-size:.8rem">
-        </div>
-
-        <!-- Footer-Hinweis -->
-        <div style="padding:.3rem .75rem;background:#f5f5f5;border-top:1px solid var(--border);
-                    font-size:.75rem;color:var(--muted)">
-          ☑&nbsp;=&nbsp;wird gesendet &nbsp;·&nbsp; ☐&nbsp;=&nbsp;wird übersprungen
-        </div>
-      </div>
-
-      <!-- Schritt 3: Senden -->
-      <button class="btn btn-primary" id="sendAllTicketsBtn">
-        📤 Alle bezahlten Tickets versenden
-      </button>
-
-      <!-- Progress UI — hidden until a send is started -->
-      <div id="emailSendProgress" style="display:none;margin-top:1.25rem">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.35rem">
-          <span id="emailProgressLabel"
-                style="font-size:.875rem;font-weight:600;color:var(--text)">Vorbereitung…</span>
-          <span id="emailProgressCount"
-                style="font-size:.875rem;color:var(--muted)">0 / 0</span>
-        </div>
-        <div style="height:10px;background:#e5e7eb;border-radius:999px;overflow:hidden">
-          <div id="emailProgressBar"
-               style="height:100%;width:0%;border-radius:999px;
-                      background:linear-gradient(90deg,var(--primary),var(--primary-dark));
-                      transition:width .25s ease">
-          </div>
-        </div>
-        <div id="emailProgressLog"
-             style="margin-top:.75rem;max-height:180px;overflow-y:auto;
-                    font-size:.78rem;font-family:'Courier New',monospace;line-height:1.55;
-                    background:#f9fafb;border:1px solid var(--border);
-                    border-radius:var(--radius-sm);padding:.5rem .75rem">
-        </div>
-      </div>
-    </div>
 
       <!-- Test row -->
       <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:1rem">

@@ -717,95 +717,17 @@ function setupEmailSend() {
       }
       startEmailSend(email);
     });
-
-  document.getElementById('loadPreviewBtn')
-    ?.addEventListener('click', loadBulkPreview);
 }
 
-// ── Empfängerliste laden & Checkliste ────────────────────────────────────────
-async function loadBulkPreview() {
-  const btn    = document.getElementById('loadPreviewBtn');
-  const status = document.getElementById('previewStatus');
-  const panel  = document.getElementById('bulkPreviewPanel');
-  const list   = document.getElementById('bulkPreviewList');
-
-  btn.disabled  = true;
-  btn.innerHTML = '<span class="spinner"></span> Lade…';
-  status.textContent = '';
-
-  try {
-    const res  = await fetch('/api/admin/bulk-email-preview');
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-
-    const recipients = data.recipients || [];
-
-    list.innerHTML = recipients.map(r => `
-      <label style="display:flex;align-items:center;gap:.55rem;padding:.28rem .75rem;
-                    border-bottom:1px solid #f0f0f0;cursor:pointer;line-height:1.4"
-             onmouseover="this.style.background='#f8f8f8'"
-             onmouseout="this.style.background=''">
-        <input type="checkbox" class="bulk-recipient-check"
-               data-order-id="${r.orderId}" data-pos="${r.position}"
-               checked style="accent-color:var(--primary);cursor:pointer;flex-shrink:0">
-        <span style="color:#bbb;min-width:2.4rem;font-size:.75rem">#${r.position}</span>
-        <span style="flex:1;font-weight:500">${esc(r.name)}</span>
-        <span style="color:#777">${esc(r.email)}</span>
-      </label>
-    `).join('');
-
-    panel.style.display = 'block';
-    _updatePreviewCounts();
-
-    // Zähler live updaten beim An-/Abhaken
-    list.addEventListener('change', _updatePreviewCounts);
-
-  } catch (e) {
-    status.textContent = `❌ Fehler: ${e.message}`;
-  } finally {
-    btn.disabled  = false;
-    btn.innerHTML = '🔄 Liste neu laden';
-  }
-}
-
-function _updatePreviewCounts() {
-  const total   = document.querySelectorAll('.bulk-recipient-check').length;
-  const checked = document.querySelectorAll('.bulk-recipient-check:checked').length;
-  const countEl = document.getElementById('previewCountLabel');
-  const sendBtn = document.getElementById('sendAllTicketsBtn');
-
-  if (countEl) countEl.textContent = `${checked} von ${total} ausgewählt`;
-  if (sendBtn && total > 0) {
-    sendBtn.innerHTML = `📤 ${checked} Ticket-Mail(s) versenden`;
-  }
-}
-
-// "Senden ab #N" – alles VOR N abwählen, ab N auswählen
-window.applySkipFrom = function () {
-  const from = parseInt(document.getElementById('skipFromInput').value, 10);
-  if (!from || from < 1) return;
-  document.querySelectorAll('.bulk-recipient-check').forEach(cb => {
-    cb.checked = parseInt(cb.dataset.pos, 10) >= from;
-  });
-  _updatePreviewCounts();
-};
-
-// Alle an- oder abwählen
-window.selectAllRecipients = function (checked) {
-  document.querySelectorAll('.bulk-recipient-check').forEach(cb => { cb.checked = checked; });
-  _updatePreviewCounts();
-};
-
-// ── Versand starten (SSE) ────────────────────────────────────────────────────
 async function startEmailSend(testEmail) {
   const isTest = !!testEmail;
 
-  // Buttons sperren
+  // Lock both buttons for the duration of the operation
   setBtn('sendAllTicketsBtn', true, '<span class="spinner"></span> Sende…');
   setBtn('testEmailBtn',      true, '<span class="spinner"></span>');
   clearAlert('emailSendAlert');
 
-  // Progress UI zurücksetzen
+  // Show and reset progress UI
   const progressWrap = document.getElementById('emailSendProgress');
   const bar          = document.getElementById('emailProgressBar');
   const label        = document.getElementById('emailProgressLabel');
@@ -820,30 +742,19 @@ async function startEmailSend(testEmail) {
   log.innerHTML               = '';
 
   const logLine = (text, color) => {
-    const div       = document.createElement('div');
-    div.style.color = color || '#333';
-    div.textContent = text;
+    const div        = document.createElement('div');
+    div.style.color  = color || '#333';
+    div.textContent  = text;
     log.appendChild(div);
-    log.scrollTop   = log.scrollHeight;
+    log.scrollTop    = log.scrollHeight;
   };
 
   try {
     const attachQr = document.getElementById('attachQrCheck')?.checked ?? true;
-
-    // Welche Order-IDs sollen übersprungen werden? (abgehakte Checkboxen = nicht checked)
-    const skipOrderIds = [];
-    document.querySelectorAll('.bulk-recipient-check:not(:checked)').forEach(cb => {
-      skipOrderIds.push(Number(cb.dataset.orderId));
-    });
-
     const response = await fetch('/api/admin/send-all-tickets', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({
-        testEmail:    testEmail || null,
-        attachQr,
-        skipOrderIds: skipOrderIds.length > 0 ? skipOrderIds : [],
-      }),
+      body:    JSON.stringify({ testEmail: testEmail || null, attachQr }),
     });
 
     if (!response.ok) {
@@ -862,8 +773,9 @@ async function startEmailSend(testEmail) {
 
       buf += decoder.decode(value, { stream: true });
 
+      // SSE events are separated by double newlines
       const parts = buf.split('\n\n');
-      buf = parts.pop();
+      buf = parts.pop(); // keep incomplete trailing fragment
 
       for (const block of parts) {
         const dataLine = block.split('\n').find(l => l.startsWith('data: '));
@@ -873,11 +785,13 @@ async function startEmailSend(testEmail) {
         try { evt = JSON.parse(dataLine.slice(6)); }
         catch { continue; }
 
+        // Non-fatal server error (stream continues)
         if (evt.error && !evt.done) {
           logLine(`⚠️ ${evt.error}`, '#dc2626');
           continue;
         }
 
+        // Progress events (have total but done is not true)
         if (typeof evt.total === 'number' && !evt.done) {
           counter.textContent = `${evt.sent} / ${evt.total}`;
           const pct = evt.total > 0 ? Math.round((evt.sent / evt.total) * 100) : 0;
@@ -893,6 +807,7 @@ async function startEmailSend(testEmail) {
           }
         }
 
+        // Final done event
         if (evt.done) {
           counter.textContent = `${evt.sent} / ${evt.total}`;
           bar.style.width     = '100%';
@@ -926,13 +841,7 @@ async function startEmailSend(testEmail) {
     showAlert('emailSendAlert', `Verbindungsfehler: ${esc(err.message)}`, 'danger');
     logLine(`❌ Verbindungsfehler: ${err.message}`, '#dc2626');
   } finally {
-    const checked = document.querySelectorAll('.bulk-recipient-check:checked').length;
-    const total   = document.querySelectorAll('.bulk-recipient-check').length;
-    setBtn('sendAllTicketsBtn', false,
-      total > 0
-        ? `📤 ${checked} Ticket-Mail(s) versenden`
-        : '📤 Alle bezahlten Tickets versenden'
-    );
-    setBtn('testEmailBtn', false, '📬 Test senden');
+    setBtn('sendAllTicketsBtn', false, '📤 Alle bezahlten Tickets versenden');
+    setBtn('testEmailBtn',      false, '📬 Test senden');
   }
 }
