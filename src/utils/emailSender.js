@@ -6,8 +6,14 @@
  */
 const nodemailer = require('nodemailer');
 
-function createTransport() {
-  return nodemailer.createTransport({
+// Gepoolter Transport: EINMAL einloggen, Verbindung für alle Mails wiederverwenden.
+// Ohne Pool öffnet jede Mail eine neue Verbindung + Login → Gmail blockt nach ~80
+// Logins ("454-4.7.0 Too many login attempts"). Mit Pool = 1 Login pro Batch.
+let _transport = null;
+
+function getTransport() {
+  if (_transport) return _transport;
+  _transport = nodemailer.createTransport({
     host:   process.env.SMTP_HOST || 'smtp.example.com',
     port:   parseInt(process.env.SMTP_PORT || '587', 10),
     secure: process.env.SMTP_SECURE === 'true',
@@ -15,7 +21,15 @@ function createTransport() {
       user: process.env.SMTP_USER || '',
       pass: process.env.SMTP_PASS || '',
     },
+    // ── Verbindungs-Pooling: verhindert das Login-Limit ──
+    pool:           true,
+    maxConnections: 1,        // eine einzige Verbindung, sequentiell
+    maxMessages:    Infinity, // Verbindung nicht nach N Mails neu aufbauen (= kein Re-Login)
+    // ── sanftes Rate-Limit, damit Gmail nicht wegen Tempo blockt ──
+    rateDelta:      1000,     // pro 1000 ms …
+    rateLimit:      5,        // … höchstens 5 Mails
   });
+  return _transport;
 }
 
 function safeName(name) {
@@ -34,7 +48,7 @@ function safeName(name) {
  * @param {boolean}       [opts.updated]    true = geändertes Ticket (Betreff anpassen)
  */
 async function sendSingleTicketEmail({ to, personName, qrBuffer, updated = false }) {
-  const transport = createTransport();
+  const transport = getTransport();
   const name = safeName(personName);
   const hasQr = !!qrBuffer;
   const subject = updated ? 'Dein aktualisiertes Abiball-Ticket' : 'Dein Abiball-Ticket';
@@ -81,7 +95,7 @@ async function sendSingleTicketEmail({ to, personName, qrBuffer, updated = false
  * @param {Buffer[]} opts.qrBuffers   QR-Code-Bilder als Buffer-Array
  */
 async function sendTicketEmail({ to, personName, qrBuffers }) {
-  const transport = createTransport();
+  const transport = getTransport();
   const name = safeName(personName);
 
   const attachments = qrBuffers.map((buf, idx) => ({
@@ -115,7 +129,7 @@ async function sendTicketEmail({ to, personName, qrBuffers }) {
  * @param {Buffer|null}   opts.qrBuffer     QR-Code-Bild als Buffer (null = kein Anhang)
  */
 async function sendFollowUpEmail({ to, personName, qrBuffer }) {
-  const transport = createTransport();
+  const transport = getTransport();
   const name = safeName(personName);
   const hasQr = !!qrBuffer;
 
