@@ -180,7 +180,8 @@
       <div id="emailSendAlert"></div>
       <p style="font-size:.9rem;color:var(--muted);margin-bottom:1rem">
         Sendet QR-Code-Tickets an alle Personen mit bezahlten Tickets.
-        Bereits versendete Tickets werden erneut gesendet.
+        Über die Empfängerliste unten kannst du bereits gesendete Mails abhaken,
+        damit sie beim erneuten Versand <strong>übersprungen</strong> werden.
       </p>
 
       <!-- Test row -->
@@ -201,6 +202,46 @@
                style="width:1rem;height:1rem;accent-color:var(--primary);cursor:pointer">
         <span>QR-Code-Ticket als Anhang mitsenden</span>
       </label>
+
+      <!-- ── Empfängerliste / bereits gesendete abhaken ──────────────────────── -->
+      <div style="border:1px solid var(--border);border-radius:var(--radius-sm);
+                  padding:.85rem 1rem;margin-bottom:1rem;background:#fafafa">
+        <div style="display:flex;justify-content:space-between;align-items:center;
+                    gap:.75rem;flex-wrap:wrap">
+          <strong style="font-size:.92rem">📋 Empfängerliste (Sendereihenfolge)</strong>
+          <button class="btn btn-outline-dark btn-sm" id="loadRecipientsBtn" style="white-space:nowrap">
+            Liste laden
+          </button>
+        </div>
+
+        <!-- Controls — hidden until the list is loaded -->
+        <div id="recipientControls" style="display:none;margin-top:.85rem">
+          <p style="font-size:.82rem;color:var(--muted);margin:0 0 .6rem">
+            Hake alle Mails ab, die <strong>bereits gesendet</strong> wurden – diese werden
+            beim Versand übersprungen. Tipp: Der Versand brach bei Nr.&nbsp;83 ab, also einfach
+            „Erste&nbsp;N abhaken“ = 82 setzen, um ab der 83. Mail weiterzusenden.
+          </p>
+
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:.7rem">
+            <div class="form-group" style="margin-bottom:0">
+              <label for="checkFirstN" style="font-size:.78rem">Erste N als gesendet markieren</label>
+              <input type="number" id="checkFirstN" min="0" step="1" placeholder="z.B. 82"
+                     style="width:120px">
+            </div>
+            <button class="btn btn-outline-dark btn-sm" id="checkFirstNBtn" type="button">Übernehmen</button>
+            <button class="btn btn-outline-dark btn-sm" id="checkAllBtn"   type="button">Alle abhaken</button>
+            <button class="btn btn-outline-dark btn-sm" id="checkNoneBtn"  type="button">Keine abhaken</button>
+            <button class="btn btn-outline-dark btn-sm" id="checkInvertBtn" type="button">Umkehren</button>
+          </div>
+
+          <div id="recipientSummary"
+               style="font-size:.85rem;font-weight:600;color:var(--text);margin-bottom:.5rem"></div>
+
+          <div id="recipientList"
+               style="max-height:260px;overflow-y:auto;border:1px solid var(--border);
+                      border-radius:var(--radius-sm);background:#fff"></div>
+        </div>
+      </div>
 
       <button class="btn btn-primary" id="sendAllTicketsBtn">
         📤 Alle bezahlten Tickets versenden

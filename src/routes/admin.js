@@ -540,9 +540,37 @@ router.delete('/danger/all', requireDangerPw, (req, res) => {
   res.json({ ok: true, deleted: 'all' });
 });
 
+// ── GET /api/admin/ticket-recipients ──────────────────────────────────────────
+// Liefert die Empfängerliste in exakt der Reihenfolge, in der der Bulk-Mailer
+// versendet. Index (1-basiert) entspricht der Position in der Sendereihenfolge,
+// sodass z.B. "ab der 83. Mail" eindeutig zugeordnet werden kann.
+router.get('/ticket-recipients', (req, res) => {
+  const db = getDb();
+  const tickets = db.prepare(`
+    SELECT ot.id, ot.ticket_name, ot.ticket_email, ot.order_id, p.code AS person_code
+    FROM order_tickets ot
+    JOIN orders  o ON o.id = ot.order_id
+    JOIN persons p ON p.id = o.person_id
+    WHERE ot.ticket_paid = 1
+      AND trim(coalesce(ot.ticket_email, '')) != ''
+    ORDER BY ot.id
+  `).all();
+  res.json({
+    recipients: tickets.map((t, i) => ({
+      index:       i + 1,
+      ticketId:    t.id,
+      ticketName:  t.ticket_name,
+      ticketEmail: t.ticket_email,
+      orderId:     t.order_id,
+      personCode:  t.person_code,
+    })),
+  });
+});
+
 // ── POST /api/admin/send-all-tickets ──────────────────────────────────────────
 router.post('/send-all-tickets', async (req, res) => {
-  const { testEmail, attachQr = true } = req.body;
+  const { testEmail, attachQr = true, skipTicketIds = [] } = req.body;
+  const skipSet = new Set((Array.isArray(skipTicketIds) ? skipTicketIds : []).map(Number));
 
   // SSE headers — X-Accel-Buffering: no prevents Caddy from buffering the stream
   res.setHeader('Content-Type', 'text/event-stream');
@@ -596,31 +624,42 @@ router.post('/send-all-tickets', async (req, res) => {
     }
 
     // ── REAL MODE — all paid tickets with a non-empty email ───────────────────
-    const tickets = db.prepare(`
+    // ORDER BY ot.id => stabile Sendereihenfolge, identisch zu /ticket-recipients,
+    // damit abgehakte (bereits gesendete) Tickets eindeutig übersprungen werden.
+    const allTickets = db.prepare(`
       SELECT ot.*, p.code AS person_code
       FROM order_tickets ot
       JOIN orders  o ON o.id = ot.order_id
       JOIN persons p ON p.id = o.person_id
       WHERE ot.ticket_paid = 1
         AND trim(coalesce(ot.ticket_email, '')) != ''
+      ORDER BY ot.id
     `).all();
+
+    // Bereits gesendete (abgehakte) Tickets herausfiltern
+    const tickets = allTickets.filter(t => !skipSet.has(t.id));
+    const skipped = allTickets.length - tickets.length;
 
     const total = tickets.length;
 
     if (total === 0) {
-      emit({ error: 'Keine bezahlten Tickets mit E-Mail-Adresse gefunden.' });
-      emit({ done: true, sent: 0, failed: 0, total: 0 });
+      emit({
+        error: skipped > 0
+          ? `Alle ${skipped} verbleibenden Tickets wurden als bereits gesendet markiert — nichts zu senden.`
+          : 'Keine bezahlten Tickets mit E-Mail-Adresse gefunden.',
+      });
+      emit({ done: true, sent: 0, failed: 0, total: 0, skipped });
       return res.end();
     }
 
-    emit({ total, sent: 0 });
+    emit({ total, sent: 0, skipped });
 
     let sent = 0;
     let failed = 0;
 
     for (const ticket of tickets) {
       const email = ticket.ticket_email.trim();
-      emit({ total, sent, current: email, status: 'sending' });
+      emit({ total, sent, current: email, status: 'sending', ticketId: ticket.id });
       try {
         const qrBuf = attachQr
           ? await generateQrBufferForTicket(db, ticket, { orderId: ticket.order_id, personCode: ticket.person_code })
@@ -631,14 +670,14 @@ router.post('/send-all-tickets', async (req, res) => {
           qrBuffer: qrBuf,
         });
         sent++;
-        emit({ total, sent, current: email, status: 'ok' });
+        emit({ total, sent, current: email, status: 'ok', ticketId: ticket.id });
       } catch (err) {
         failed++;
-        emit({ total, sent, current: email, status: 'error', error: err.message });
+        emit({ total, sent, current: email, status: 'error', error: err.message, ticketId: ticket.id });
       }
     }
 
-    emit({ done: true, sent, failed, total });
+    emit({ done: true, sent, failed, total, skipped });
 
   } catch (err) {
     emit({ error: `Unerwarteter Fehler: ${err.message}` });
