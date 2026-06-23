@@ -169,10 +169,6 @@ Das Orga-Team`;
         <!-- Header -->
         <tr>
           <td style="background:#1a1a2e;padding:32px 40px;text-align:center;">
-            <img src="/LOGO.png"
-                 alt="Abi-Logo"
-                 width="160"
-                 style="display:block;margin:0 auto 20px;max-width:160px;height:auto;">
             <p style="margin:0 0 4px;color:#a0a8c8;font-size:13px;letter-spacing:2px;text-transform:uppercase;">26. Juni 2025</p>
             <h1 style="margin:0;color:#ffffff;font-size:28px;font-weight:700;letter-spacing:1px;">Abiball 2025</h1>
             <p style="margin:8px 0 0;color:#c8cfe8;font-size:15px;">Alle Infos auf einen Blick</p>
@@ -213,7 +209,7 @@ Das Orga-Team`;
               </tr>
               <tr style="background:#f8f8fc;">
                 <td style="padding:8px 16px 8px 0;color:#1a1a2e;font-weight:700;font-size:15px;white-space:nowrap;vertical-align:top;">22:00 Uhr</td>
-                <td style="padding:8px 0;color:#444444;font-size:15px;vertical-align:top;">Ende des offiziellen Teils</td>
+                <td style="padding:8px 0;color:#444444;font-size:15px;vertical-align:top;">Ende des offiziellen Teils & Afterparty</td>
               </tr>
             </table>
             <p style="margin:16px 0 0;color:#666666;font-size:14px;line-height:1.6;font-style:italic;">
@@ -244,8 +240,8 @@ Das Orga-Team`;
               Weitere Infos
             </h2>
             <p style="margin:0;color:#555555;font-size:15px;line-height:1.7;">
-              Weitere Formalitäten und Details folgen in Kürze. Bei Fragen oder Anliegen
-              meldet euch jederzeit gerne bei uns:
+              Bei Fragen oder Anliegen
+              meldet euch jederzeit gerne bei mir:
             </p>
             <p style="margin:12px 0 0;">
               <a href="mailto:mikko@vorhanden.de"
