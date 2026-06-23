@@ -51,6 +51,7 @@ function initDashboard() {
   setupTabs();
   loadStats(); loadDashUnpaid(); loadOrders(); loadPersons(); loadPayments();
   loadSettings(); setupSettingsSave(); setupCsvUpload(); setupPdfUpload(); setupGenerateCodes();
+  setupEmailSend();
 }
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
@@ -701,3 +702,146 @@ window.dangerNuclear = async function() {
     } else showDangerResult(data.error || 'Fehler.', 'error');
   } catch { showDangerResult('Verbindungsfehler.', 'error'); }
 };
+
+// ── Mass e-mail send ─────────────────────────────────────────────────────────
+function setupEmailSend() {
+  document.getElementById('sendAllTicketsBtn')
+    ?.addEventListener('click', () => startEmailSend(null));
+
+  document.getElementById('testEmailBtn')
+    ?.addEventListener('click', () => {
+      const email = (document.getElementById('testEmailInput')?.value || '').trim();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showAlert('emailSendAlert', 'Bitte eine gültige E-Mail-Adresse für den Test eingeben.', 'warning');
+        return;
+      }
+      startEmailSend(email);
+    });
+}
+
+async function startEmailSend(testEmail) {
+  const isTest = !!testEmail;
+
+  // Lock both buttons for the duration of the operation
+  setBtn('sendAllTicketsBtn', true, '<span class="spinner"></span> Sende…');
+  setBtn('testEmailBtn',      true, '<span class="spinner"></span>');
+  clearAlert('emailSendAlert');
+
+  // Show and reset progress UI
+  const progressWrap = document.getElementById('emailSendProgress');
+  const bar          = document.getElementById('emailProgressBar');
+  const label        = document.getElementById('emailProgressLabel');
+  const counter      = document.getElementById('emailProgressCount');
+  const log          = document.getElementById('emailProgressLog');
+
+  progressWrap.style.display = 'block';
+  bar.style.width             = '0%';
+  bar.style.background        = 'linear-gradient(90deg,var(--primary),var(--primary-dark))';
+  label.textContent           = 'Vorbereitung…';
+  counter.textContent         = '0 / ?';
+  log.innerHTML               = '';
+
+  const logLine = (text, color) => {
+    const div        = document.createElement('div');
+    div.style.color  = color || '#333';
+    div.textContent  = text;
+    log.appendChild(div);
+    log.scrollTop    = log.scrollHeight;
+  };
+
+  try {
+    const attachQr = document.getElementById('attachQrCheck')?.checked ?? true;
+    const response = await fetch('/api/admin/send-all-tickets', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ testEmail: testEmail || null, attachQr }),
+    });
+
+    if (!response.ok) {
+      const d = await response.json().catch(() => ({}));
+      showAlert('emailSendAlert', d.error || `HTTP-Fehler ${response.status}`, 'danger');
+      return;
+    }
+
+    const reader  = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buf += decoder.decode(value, { stream: true });
+
+      // SSE events are separated by double newlines
+      const parts = buf.split('\n\n');
+      buf = parts.pop(); // keep incomplete trailing fragment
+
+      for (const block of parts) {
+        const dataLine = block.split('\n').find(l => l.startsWith('data: '));
+        if (!dataLine) continue;
+
+        let evt;
+        try { evt = JSON.parse(dataLine.slice(6)); }
+        catch { continue; }
+
+        // Non-fatal server error (stream continues)
+        if (evt.error && !evt.done) {
+          logLine(`⚠️ ${evt.error}`, '#dc2626');
+          continue;
+        }
+
+        // Progress events (have total but done is not true)
+        if (typeof evt.total === 'number' && !evt.done) {
+          counter.textContent = `${evt.sent} / ${evt.total}`;
+          const pct = evt.total > 0 ? Math.round((evt.sent / evt.total) * 100) : 0;
+          bar.style.width     = `${pct}%`;
+
+          if (evt.status === 'sending') {
+            label.textContent = `Sende an ${esc(evt.current)}…`;
+          } else if (evt.status === 'ok') {
+            label.textContent = `✓ ${esc(evt.current)}`;
+            logLine(`✅ ${evt.current}`, '#166534');
+          } else if (evt.status === 'error') {
+            logLine(`❌ ${evt.current} — ${evt.error || 'Fehler'}`, '#dc2626');
+          }
+        }
+
+        // Final done event
+        if (evt.done) {
+          counter.textContent = `${evt.sent} / ${evt.total}`;
+          bar.style.width     = '100%';
+
+          if (evt.total === 0) {
+            label.textContent = 'Keine bezahlten Tickets gefunden.';
+            showAlert('emailSendAlert',
+              'Keine bezahlten Tickets mit E-Mail-Adresse vorhanden.', 'warning');
+
+          } else if (evt.failed > 0) {
+            bar.style.background = 'linear-gradient(90deg,#f59e0b,#d97706)';
+            label.textContent    = `Fertig — ${evt.failed} Fehler`;
+            showAlert('emailSendAlert',
+              `${evt.sent} E-Mail(s) gesendet, ${evt.failed} fehlgeschlagen. Details im Log.`,
+              'warning');
+
+          } else {
+            bar.style.background = '#2e7d32';
+            label.textContent    = isTest ? '✓ Test-E-Mail gesendet' : '✓ Alle E-Mails gesendet';
+            showAlert('emailSendAlert',
+              isTest
+                ? `Test-E-Mail erfolgreich an ${esc(testEmail)} gesendet.`
+                : `${evt.sent} Ticket-E-Mail(s) erfolgreich versendet.`,
+              'success');
+          }
+        }
+      }
+    }
+
+  } catch (err) {
+    showAlert('emailSendAlert', `Verbindungsfehler: ${esc(err.message)}`, 'danger');
+    logLine(`❌ Verbindungsfehler: ${err.message}`, '#dc2626');
+  } finally {
+    setBtn('sendAllTicketsBtn', false, '📤 Alle bezahlten Tickets versenden');
+    setBtn('testEmailBtn',      false, '📬 Test senden');
+  }
+}

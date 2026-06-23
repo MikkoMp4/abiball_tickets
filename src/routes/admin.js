@@ -14,7 +14,7 @@ const { getDb, getSettings, nowBerlin }         = require('../database');
 const { generateUniqueCodes }        = require('../utils/codeGenerator');
 const { parseBankPdf }               = require('../utils/pdfParser');
 const { generateQrBufferForTicket }  = require('../utils/qrGenerator');
-const { sendTicketEmail }            = require('../utils/emailSender');
+const { sendTicketEmail, sendSingleTicketEmail } = require('../utils/emailSender');
 const { recalcPaymentStatus }        = require('./payments');
 
 const pdfUpload = multer({
@@ -538,6 +538,116 @@ router.delete('/danger/all', requireDangerPw, (req, res) => {
     db.prepare('DELETE FROM persons').run();
   })();
   res.json({ ok: true, deleted: 'all' });
+});
+
+// ── POST /api/admin/send-all-tickets ──────────────────────────────────────────
+router.post('/send-all-tickets', async (req, res) => {
+  const { testEmail, attachQr = true } = req.body;
+
+  // SSE headers — X-Accel-Buffering: no prevents Caddy from buffering the stream
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const emit = (data) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+    if (typeof res.flush === 'function') res.flush();
+  };
+
+  const db = getDb();
+
+  try {
+    // ── TEST MODE ─────────────────────────────────────────────────────────────
+    if (testEmail) {
+      const sample = db.prepare(`
+        SELECT ot.*, p.code AS person_code
+        FROM order_tickets ot
+        JOIN orders  o ON o.id = ot.order_id
+        JOIN persons p ON p.id = o.person_id
+        WHERE ot.ticket_paid = 1
+        LIMIT 1
+      `).get();
+
+      if (!sample) {
+        emit({ error: 'Keine bezahlten Tickets gefunden — Test-E-Mail nicht möglich.' });
+        emit({ done: true, sent: 0, failed: 0, total: 0 });
+        return res.end();
+      }
+
+      emit({ total: 1, sent: 0, current: testEmail, status: 'sending' });
+      try {
+        const qrBuf = attachQr
+          ? await generateQrBufferForTicket(db, sample, { orderId: sample.order_id, personCode: sample.person_code })
+          : null;
+        await sendSingleTicketEmail({
+          to: testEmail,
+          personName: sample.ticket_name,
+          qrBuffer: qrBuf,
+          updated: false,
+        });
+        emit({ total: 1, sent: 1, current: testEmail, status: 'ok' });
+        emit({ done: true, sent: 1, failed: 0, total: 1 });
+      } catch (err) {
+        emit({ total: 1, sent: 0, current: testEmail, status: 'error', error: err.message });
+        emit({ done: true, sent: 0, failed: 1, total: 1 });
+      }
+      return res.end();
+    }
+
+    // ── REAL MODE — all paid tickets with a non-empty email ───────────────────
+    const tickets = db.prepare(`
+      SELECT ot.*, p.code AS person_code
+      FROM order_tickets ot
+      JOIN orders  o ON o.id = ot.order_id
+      JOIN persons p ON p.id = o.person_id
+      WHERE ot.ticket_paid = 1
+        AND trim(coalesce(ot.ticket_email, '')) != ''
+    `).all();
+
+    const total = tickets.length;
+
+    if (total === 0) {
+      emit({ error: 'Keine bezahlten Tickets mit E-Mail-Adresse gefunden.' });
+      emit({ done: true, sent: 0, failed: 0, total: 0 });
+      return res.end();
+    }
+
+    emit({ total, sent: 0 });
+
+    let sent = 0;
+    let failed = 0;
+
+    for (const ticket of tickets) {
+      const email = ticket.ticket_email.trim();
+      emit({ total, sent, current: email, status: 'sending' });
+      try {
+        const qrBuf = attachQr
+          ? await generateQrBufferForTicket(db, ticket, { orderId: ticket.order_id, personCode: ticket.person_code })
+          : null;
+        await sendSingleTicketEmail({
+          to: email,
+          personName: ticket.ticket_name,
+          qrBuffer: qrBuf,
+          updated: false,
+        });
+        sent++;
+        emit({ total, sent, current: email, status: 'ok' });
+      } catch (err) {
+        failed++;
+        emit({ total, sent, current: email, status: 'error', error: err.message });
+      }
+    }
+
+    emit({ done: true, sent, failed, total });
+
+  } catch (err) {
+    emit({ error: `Unerwarteter Fehler: ${err.message}` });
+    emit({ done: true, sent: 0, failed: 0, total: 0 });
+  }
+
+  res.end();
 });
 
 module.exports = router;

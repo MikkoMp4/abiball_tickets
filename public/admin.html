@@ -173,6 +173,64 @@
         </table>
       </div>
     </div>
+
+    <!-- ── E-Mail-Massenversand ──────────────────────────────────────────────── -->
+    <div class="card">
+      <h2>📧 Tickets per E-Mail versenden</h2>
+      <div id="emailSendAlert"></div>
+      <p style="font-size:.9rem;color:var(--muted);margin-bottom:1rem">
+        Sendet QR-Code-Tickets an alle Personen mit bezahlten Tickets.
+        Bereits versendete Tickets werden erneut gesendet.
+      </p>
+
+      <!-- Test row -->
+      <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:1rem">
+        <div class="form-group" style="margin-bottom:0;flex:1;min-width:200px">
+          <label for="testEmailInput">Test-E-Mail-Adresse</label>
+          <input type="email" id="testEmailInput" placeholder="meine@email.de" autocomplete="email">
+        </div>
+        <button class="btn btn-outline-dark" id="testEmailBtn" style="white-space:nowrap">
+          📬 Test senden
+        </button>
+      </div>
+
+      <!-- QR attach toggle -->
+      <label style="display:inline-flex;align-items:center;gap:.5rem;
+                    margin-bottom:1rem;font-size:.9rem;cursor:pointer;user-select:none">
+        <input type="checkbox" id="attachQrCheck" checked
+               style="width:1rem;height:1rem;accent-color:var(--primary);cursor:pointer">
+        <span>QR-Code-Ticket als Anhang mitsenden</span>
+      </label>
+
+      <button class="btn btn-primary" id="sendAllTicketsBtn">
+        📤 Alle bezahlten Tickets versenden
+      </button>
+
+      <!-- Progress UI — hidden until a send is started -->
+      <div id="emailSendProgress" style="display:none;margin-top:1.25rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.35rem">
+          <span id="emailProgressLabel"
+                style="font-size:.875rem;font-weight:600;color:var(--text)">Vorbereitung…</span>
+          <span id="emailProgressCount"
+                style="font-size:.875rem;color:var(--muted)">0 / 0</span>
+        </div>
+        <!-- Bar track -->
+        <div style="height:10px;background:#e5e7eb;border-radius:999px;overflow:hidden">
+          <div id="emailProgressBar"
+               style="height:100%;width:0%;border-radius:999px;
+                      background:linear-gradient(90deg,var(--primary),var(--primary-dark));
+                      transition:width .25s ease">
+          </div>
+        </div>
+        <!-- Per-email log -->
+        <div id="emailProgressLog"
+             style="margin-top:.75rem;max-height:180px;overflow-y:auto;
+                    font-size:.78rem;font-family:'Courier New',monospace;line-height:1.55;
+                    background:#f9fafb;border:1px solid var(--border);
+                    border-radius:var(--radius-sm);padding:.5rem .75rem">
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ── TAB: Zahlungen ────────────────────────────────────────────────── -->
