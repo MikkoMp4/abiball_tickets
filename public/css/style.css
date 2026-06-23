@@ -158,6 +158,7 @@ button { cursor: pointer; background: none; border: none; }
 .btn:hover   { transform: translateY(-2px); filter: brightness(1.07); }
 .btn:active  { transform: scale(.97); }
 .btn:disabled { opacity: .55; pointer-events: none; }
+.btn-sm { padding: .35rem .75rem; font-size: .8rem; min-height: 34px; }
 
 .btn-primary  {
   background:  linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);

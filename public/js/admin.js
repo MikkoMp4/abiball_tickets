@@ -717,6 +717,149 @@ function setupEmailSend() {
       }
       startEmailSend(email);
     });
+
+  setupRecipientList();
+}
+
+// ── Empfängerliste: bereits gesendete Mails abhaken / überspringen ───────────
+const SENT_TIDS_KEY = 'abiball_sent_ticket_ids';
+const recipientState = { list: [], checked: loadPersistedChecked() };
+
+function loadPersistedChecked() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SENT_TIDS_KEY) || '[]');
+    return new Set(Array.isArray(raw) ? raw.map(Number) : []);
+  } catch { return new Set(); }
+}
+function persistChecked() {
+  try { localStorage.setItem(SENT_TIDS_KEY, JSON.stringify([...recipientState.checked])); } catch {}
+}
+
+// Ticket-IDs, die beim Versand übersprungen werden sollen (= bereits gesendet)
+function getSkipTicketIds() { return [...recipientState.checked]; }
+
+function setupRecipientList() {
+  document.getElementById('loadRecipientsBtn')?.addEventListener('click', loadRecipients);
+
+  document.getElementById('checkFirstNBtn')?.addEventListener('click', () => {
+    const n = parseInt(document.getElementById('checkFirstN').value, 10);
+    if (isNaN(n) || n < 0) { showAlert('emailSendAlert', 'Bitte eine gültige Zahl eingeben.', 'warning'); return; }
+    recipientState.checked = new Set(recipientState.list.slice(0, n).map(r => r.ticketId));
+    syncRecipientUi();
+  });
+  document.getElementById('checkAllBtn')?.addEventListener('click', () => {
+    recipientState.checked = new Set(recipientState.list.map(r => r.ticketId));
+    syncRecipientUi();
+  });
+  document.getElementById('checkNoneBtn')?.addEventListener('click', () => {
+    recipientState.checked = new Set();
+    syncRecipientUi();
+  });
+  document.getElementById('checkInvertBtn')?.addEventListener('click', () => {
+    recipientState.checked = new Set(
+      recipientState.list.filter(r => !recipientState.checked.has(r.ticketId)).map(r => r.ticketId)
+    );
+    syncRecipientUi();
+  });
+}
+
+async function loadRecipients() {
+  setBtn('loadRecipientsBtn', true, '<span class="spinner"></span>');
+  try {
+    const res  = await fetch('/api/admin/ticket-recipients');
+    const data = await res.json();
+    if (!res.ok) { showAlert('emailSendAlert', data.error || 'Liste konnte nicht geladen werden.', 'danger'); return; }
+
+    recipientState.list = data.recipients || [];
+    // Persistierte Haken auf noch existierende Tickets beschränken
+    const validIds = new Set(recipientState.list.map(r => r.ticketId));
+    recipientState.checked = new Set([...recipientState.checked].filter(id => validIds.has(id)));
+
+    document.getElementById('recipientControls').style.display = 'block';
+    renderRecipientList();
+    syncRecipientUi();
+  } catch (err) {
+    showAlert('emailSendAlert', `Verbindungsfehler: ${esc(err.message)}`, 'danger');
+  } finally {
+    setBtn('loadRecipientsBtn', false, 'Liste neu laden');
+  }
+}
+
+function renderRecipientList() {
+  const wrap = document.getElementById('recipientList');
+  if (!recipientState.list.length) {
+    wrap.innerHTML = `<div style="padding:.75rem;color:var(--muted);font-size:.85rem">
+      Keine bezahlten Tickets mit E-Mail-Adresse gefunden.</div>`;
+    return;
+  }
+  wrap.innerHTML = recipientState.list.map(r => {
+    const isChecked = recipientState.checked.has(r.ticketId);
+    return `<label data-tid="${r.ticketId}" style="display:flex;align-items:center;gap:.6rem;
+                  padding:.4rem .65rem;border-bottom:1px solid var(--border);cursor:pointer;
+                  font-size:.82rem;${isChecked ? 'background:#f0fdf4;color:#15803d' : ''}">
+        <input type="checkbox" class="recipient-check" data-tid="${r.ticketId}" ${isChecked ? 'checked' : ''}
+               style="width:1rem;height:1rem;accent-color:var(--primary);cursor:pointer;flex:none">
+        <span style="flex:none;width:2.75rem;font-variant-numeric:tabular-nums;color:var(--muted)">#${r.index}</span>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          <strong>${esc(r.ticketName || '–')}</strong>
+          <span style="color:var(--muted)"> &lt;${esc(r.ticketEmail)}&gt;</span>
+        </span>
+        <span style="flex:none;font-family:monospace;color:var(--muted)">${esc(r.personCode || '')}</span>
+      </label>`;
+  }).join('');
+
+  wrap.querySelectorAll('.recipient-check').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const tid = Number(cb.dataset.tid);
+      if (cb.checked) recipientState.checked.add(tid); else recipientState.checked.delete(tid);
+      // Nur diese Zeile aktualisieren, ohne neu zu rendern
+      const row = cb.closest('label');
+      if (row) row.style.cssText = row.style.cssText.replace(/background:[^;]*;?|color:[^;]*;?/g, '');
+      persistChecked();
+      updateRecipientSummary();
+      if (cb.checked && row) { row.style.background = '#f0fdf4'; row.style.color = '#15803d'; }
+    });
+  });
+}
+
+// Checkbox-DOM an recipientState.checked angleichen (nach Bulk-Aktionen)
+function syncRecipientUi() {
+  document.querySelectorAll('#recipientList .recipient-check').forEach(cb => {
+    const tid = Number(cb.dataset.tid);
+    const on  = recipientState.checked.has(tid);
+    cb.checked = on;
+    const row = cb.closest('label');
+    if (row) {
+      if (on) { row.style.background = '#f0fdf4'; row.style.color = '#15803d'; }
+      else    { row.style.background = ''; row.style.color = ''; }
+    }
+  });
+  persistChecked();
+  updateRecipientSummary();
+}
+
+function updateRecipientSummary() {
+  const el = document.getElementById('recipientSummary');
+  if (!el) return;
+  const total   = recipientState.list.length;
+  const skipped = recipientState.list.filter(r => recipientState.checked.has(r.ticketId)).length;
+  const toSend  = total - skipped;
+  el.innerHTML = `📤 <span style="color:var(--primary)">${toSend} werden gesendet</span>
+    · ⏭️ ${skipped} übersprungen · ${total} gesamt`;
+}
+
+// Eine Ticket-ID nachträglich abhaken (während des Versands automatisch gesetzt)
+function markTicketSent(ticketId) {
+  if (ticketId == null) return;
+  recipientState.checked.add(Number(ticketId));
+  persistChecked();
+  const cb = document.querySelector(`#recipientList .recipient-check[data-tid="${ticketId}"]`);
+  if (cb) {
+    cb.checked = true;
+    const row = cb.closest('label');
+    if (row) { row.style.background = '#f0fdf4'; row.style.color = '#15803d'; }
+  }
+  updateRecipientSummary();
 }
 
 async function startEmailSend(testEmail) {
@@ -751,10 +894,15 @@ async function startEmailSend(testEmail) {
 
   try {
     const attachQr = document.getElementById('attachQrCheck')?.checked ?? true;
+    // Bereits abgehakte (gesendete) Tickets überspringen — nur im echten Versand
+    const skipTicketIds = isTest ? [] : getSkipTicketIds();
+    if (!isTest && skipTicketIds.length) {
+      logLine(`⏭️ ${skipTicketIds.length} bereits gesendete Mail(s) werden übersprungen.`, '#6b7280');
+    }
     const response = await fetch('/api/admin/send-all-tickets', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ testEmail: testEmail || null, attachQr }),
+      body:    JSON.stringify({ testEmail: testEmail || null, attachQr, skipTicketIds }),
     });
 
     if (!response.ok) {
@@ -802,6 +950,8 @@ async function startEmailSend(testEmail) {
           } else if (evt.status === 'ok') {
             label.textContent = `✓ ${esc(evt.current)}`;
             logLine(`✅ ${evt.current}`, '#166534');
+            // Erfolgreich gesendetes Ticket sofort abhaken → übersteht einen erneuten Abbruch
+            if (!isTest) markTicketSent(evt.ticketId);
           } else if (evt.status === 'error') {
             logLine(`❌ ${evt.current} — ${evt.error || 'Fehler'}`, '#dc2626');
           }
@@ -811,17 +961,24 @@ async function startEmailSend(testEmail) {
         if (evt.done) {
           counter.textContent = `${evt.sent} / ${evt.total}`;
           bar.style.width     = '100%';
+          const skipNote = evt.skipped ? ` (${evt.skipped} übersprungen)` : '';
 
           if (evt.total === 0) {
-            label.textContent = 'Keine bezahlten Tickets gefunden.';
-            showAlert('emailSendAlert',
-              'Keine bezahlten Tickets mit E-Mail-Adresse vorhanden.', 'warning');
+            if (evt.skipped > 0) {
+              label.textContent = 'Nichts zu senden — alles abgehakt.';
+              showAlert('emailSendAlert',
+                `Alle ${evt.skipped} verbleibenden Tickets sind als bereits gesendet markiert.`, 'warning');
+            } else {
+              label.textContent = 'Keine bezahlten Tickets gefunden.';
+              showAlert('emailSendAlert',
+                'Keine bezahlten Tickets mit E-Mail-Adresse vorhanden.', 'warning');
+            }
 
           } else if (evt.failed > 0) {
             bar.style.background = 'linear-gradient(90deg,#f59e0b,#d97706)';
             label.textContent    = `Fertig — ${evt.failed} Fehler`;
             showAlert('emailSendAlert',
-              `${evt.sent} E-Mail(s) gesendet, ${evt.failed} fehlgeschlagen. Details im Log.`,
+              `${evt.sent} E-Mail(s) gesendet, ${evt.failed} fehlgeschlagen${skipNote}. Details im Log.`,
               'warning');
 
           } else {
@@ -830,7 +987,7 @@ async function startEmailSend(testEmail) {
             showAlert('emailSendAlert',
               isTest
                 ? `Test-E-Mail erfolgreich an ${esc(testEmail)} gesendet.`
-                : `${evt.sent} Ticket-E-Mail(s) erfolgreich versendet.`,
+                : `${evt.sent} Ticket-E-Mail(s) erfolgreich versendet${skipNote}.`,
               'success');
           }
         }
