@@ -14,7 +14,7 @@ const { getDb, getSettings, nowBerlin }         = require('../database');
 const { generateUniqueCodes }        = require('../utils/codeGenerator');
 const { parseBankPdf }               = require('../utils/pdfParser');
 const { generateQrBufferForTicket }  = require('../utils/qrGenerator');
-const { sendTicketEmail, sendSingleTicketEmail } = require('../utils/emailSender');
+const { sendTicketEmail, sendSingleTicketEmail, sendFollowUpEmail } = require('../utils/emailSender');
 const { recalcPaymentStatus }        = require('./payments');
 
 const pdfUpload = multer({
@@ -581,11 +581,10 @@ router.post('/send-all-tickets', async (req, res) => {
         const qrBuf = attachQr
           ? await generateQrBufferForTicket(db, sample, { orderId: sample.order_id, personCode: sample.person_code })
           : null;
-        await sendSingleTicketEmail({
+        await sendFollowUpEmail({
           to: testEmail,
           personName: sample.ticket_name,
           qrBuffer: qrBuf,
-          updated: false,
         });
         emit({ total: 1, sent: 1, current: testEmail, status: 'ok' });
         emit({ done: true, sent: 1, failed: 0, total: 1 });
@@ -626,11 +625,10 @@ router.post('/send-all-tickets', async (req, res) => {
         const qrBuf = attachQr
           ? await generateQrBufferForTicket(db, ticket, { orderId: ticket.order_id, personCode: ticket.person_code })
           : null;
-        await sendSingleTicketEmail({
+        await sendFollowUpEmail({
           to: email,
           personName: ticket.ticket_name,
           qrBuffer: qrBuf,
-          updated: false,
         });
         sent++;
         emit({ total, sent, current: email, status: 'ok' });

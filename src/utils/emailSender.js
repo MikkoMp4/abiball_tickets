@@ -104,4 +104,43 @@ async function sendTicketEmail({ to, personName, qrBuffers }) {
   });
 }
 
-module.exports = { sendTicketEmail, sendSingleTicketEmail };
+/**
+ * Sendet eine Follow-Up-E-Mail an alle bezahlten Ticket-Inhaber.
+ * Wird ausschließlich vom Bulk-Mailer (/api/admin/send-all-tickets) verwendet.
+ * Texte hier eintragen ↓
+ *
+ * @param {object} opts
+ * @param {string}        opts.to           Empfänger-E-Mail
+ * @param {string}        opts.personName   Vollständiger Name
+ * @param {Buffer|null}   opts.qrBuffer     QR-Code-Bild als Buffer (null = kein Anhang)
+ */
+async function sendFollowUpEmail({ to, personName, qrBuffer }) {
+  const transport = createTransport();
+  const name = safeName(personName);
+  const hasQr = !!qrBuffer;
+
+  // ── Betreff ────────────────────────────────────────────────────────────────
+  const subject = ''; // TODO: Betreff hier eintragen
+
+  // ── Plaintext-Version ──────────────────────────────────────────────────────
+  const textBody = `Hallo ${personName},\n\n` +
+    // TODO: Text hier eintragen
+    `\n\nDas Orga-Team`;
+
+  // ── HTML-Version ───────────────────────────────────────────────────────────
+  const htmlBody =
+    `<p>Hallo <strong>${name}</strong>,</p>` +
+    // TODO: HTML hier eintragen
+    `<p><em>Das Orga-Team</em></p>`;
+
+  await transport.sendMail({
+    from:        process.env.MAIL_FROM || '"no-reply Abiball Tickets" <tickets@example.com>',
+    to,
+    subject,
+    text:        textBody,
+    html:        htmlBody,
+    attachments: hasQr ? [{ filename: 'ticket.png', content: qrBuffer, contentType: 'image/png' }] : [],
+  });
+}
+
+module.exports = { sendTicketEmail, sendSingleTicketEmail, sendFollowUpEmail };
