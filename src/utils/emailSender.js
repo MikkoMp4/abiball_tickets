@@ -126,7 +126,7 @@ async function sendFollowUpEmail({ to, personName, qrBuffer }) {
   const textBody =
 `Hallo ${personName},
 
-der Freitag rückt näher! Hier kommen alle wichtigen Informationen zum Abiball am 26.06.2025 auf einen Blick.
+der Freitag rückt näher! Hier kommen alle wichtigen Informationen zum Abiball am 26.06.2026 auf einen Blick.
 
 ABLAUF DES ABENDS
 ─────────────────
@@ -169,8 +169,8 @@ Das Orga-Team`;
         <!-- Header -->
         <tr>
           <td style="background:#1a1a2e;padding:32px 40px;text-align:center;">
-            <p style="margin:0 0 4px;color:#a0a8c8;font-size:13px;letter-spacing:2px;text-transform:uppercase;">26. Juni 2025</p>
-            <h1 style="margin:0;color:#ffffff;font-size:28px;font-weight:700;letter-spacing:1px;">Abiball 2025</h1>
+            <p style="margin:0 0 4px;color:#a0a8c8;font-size:13px;letter-spacing:2px;text-transform:uppercase;">26. Juni 2026</p>
+            <h1 style="margin:0;color:#ffffff;font-size:28px;font-weight:700;letter-spacing:1px;">Abiball 2026</h1>
             <p style="margin:8px 0 0;color:#c8cfe8;font-size:15px;">Alle Infos auf einen Blick</p>
           </td>
         </tr>
@@ -215,6 +215,7 @@ Das Orga-Team`;
             <p style="margin:16px 0 0;color:#666666;font-size:14px;line-height:1.6;font-style:italic;">
               Bitte erscheint möglichst pünktlich, da das Programm um 17:30 Uhr startet.
               Die Vorspeise steht bereits auf den Tischen – ihr müsst also nicht lange warten.
+              Es gibt kostenlose Alkoholfreie Getränke, Bier und Wein. Spirituosen sind nicht im Preis enthalten, können aber natürlich erworben werden.
             </p>
           </td>
         </tr>
